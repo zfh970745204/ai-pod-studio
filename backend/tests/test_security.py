@@ -25,6 +25,8 @@ from app.repositories.models import (
     SecurityEvent,
     User,
     UserRole,
+    _audit_uuid,
+    _redact_audit_value,
 )
 from app.services.auth import AuthService
 from app.services.image_executor import ImageJobExecutor, UpstreamCircuitBreaker
@@ -55,6 +57,11 @@ def test_prompt_guard_and_upstream_circuit_recovery() -> None:
         "consecutive_failures": 0,
         "retry_after_seconds": 0,
     }
+
+
+def test_audit_value_redaction_handles_binary_and_invalid_user_ids() -> None:
+    assert _redact_audit_value(b"not-for-audit-log") == "[BINARY REDACTED]"
+    assert _audit_uuid("not-a-uuid") is None
 
 
 @pytest.mark.asyncio

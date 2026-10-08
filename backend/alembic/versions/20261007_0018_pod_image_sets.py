@@ -56,7 +56,9 @@ def upgrade() -> None:
             CONSTRAINT uq_pod_image_slots_set_code UNIQUE (image_set_id, code)
         )
     """)
-    op.create_index("ix_pod_image_slots_set_order", "pod_image_slots", ["image_set_id", "sort_order", "id"])
+    op.create_index(
+        "ix_pod_image_slots_set_order", "pod_image_slots", ["image_set_id", "sort_order", "id"]
+    )
     op.create_index("ix_pod_image_slots_generation_job", "pod_image_slots", ["generation_job_id"])
 
     for row in (
@@ -94,9 +96,19 @@ def upgrade() -> None:
                 AND NOT EXISTS (SELECT 1 FROM operation_prices WHERE operation_id = operation_catalog.id)
             """).bindparams(price_id=row[1], points=row[4], code=row[2])
         )
-    op.execute(sa.text("INSERT INTO schema_migrations (version) VALUES (:version)").bindparams(version=revision))
+    op.execute(
+        sa.text("INSERT INTO schema_migrations (version) VALUES (:version)").bindparams(
+            version=revision
+        )
+    )
 
 
 def downgrade() -> None:
-    op.execute("UPDATE operation_catalog SET enabled = false WHERE code IN ('pod.image.strategy.generate', 'pod.visual.generic')")
-    op.execute(sa.text("DELETE FROM schema_migrations WHERE version = :version").bindparams(version=revision))
+    op.execute(
+        "UPDATE operation_catalog SET enabled = false WHERE code IN ('pod.image.strategy.generate', 'pod.visual.generic')"
+    )
+    op.execute(
+        sa.text("DELETE FROM schema_migrations WHERE version = :version").bindparams(
+            version=revision
+        )
+    )

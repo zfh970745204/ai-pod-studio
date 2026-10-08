@@ -1420,7 +1420,9 @@ class JobService:
             if master is None or master.status != "active":
                 raise ApiError(409, "POD_PRINT_MASTER_NOT_ACTIVE", "Print Master 尚未锁定或已失效")
             if source_id is not None or parameters.get("reference_asset_ids"):
-                raise ApiError(422, "INVALID_OPERATION_PARAMETERS", "图片套组规划不接受图片来源参数")
+                raise ApiError(
+                    422, "INVALID_OPERATION_PARAMETERS", "图片套组规划不接受图片来源参数"
+                )
             if parameters.get("image_count", 1) != 1:
                 raise ApiError(422, "INVALID_IMAGE_COUNT", "图片套组规划每次仅生成一套策略")
             return 1
@@ -1431,9 +1433,13 @@ class JobService:
             if product is None or product.owner_id != user_id:
                 raise ApiError(404, "POD_PRODUCT_NOT_FOUND", "商品不存在")
             if product.primary_visual_asset_id is None or product.status not in {
-                "visual_ready", "review_pending", "approved"
+                "visual_ready",
+                "review_pending",
+                "approved",
             }:
-                raise ApiError(409, "POD_PRODUCT_MAIN_VISUAL_REQUIRED", "请先完成商品主图生成和审核")
+                raise ApiError(
+                    409, "POD_PRODUCT_MAIN_VISUAL_REQUIRED", "请先完成商品主图生成和审核"
+                )
             master = await session.get(PodPrintMaster, product.print_master_id)
             if master is None or master.status != "active":
                 raise ApiError(409, "POD_PRINT_MASTER_NOT_ACTIVE", "Print Master 尚未锁定或已失效")
@@ -1482,10 +1488,14 @@ class JobService:
                 raise ApiError(422, "POD_BLANK_REFERENCE_REQUIRED", "商品主图必须指定胚件参考")
             reference_ids = parameters.get("reference_asset_ids")
             if not isinstance(reference_ids, list) or len(reference_ids) < 2:
-                raise ApiError(422, "POD_VISUAL_REFERENCES_REQUIRED", "商品主图必须同时引用胚件和 Print Master")
+                raise ApiError(
+                    422, "POD_VISUAL_REFERENCES_REQUIRED", "商品主图必须同时引用胚件和 Print Master"
+                )
             blank_reference_ids = parameters.get("blank_reference_asset_ids")
             if not isinstance(blank_reference_ids, list) or not blank_reference_ids:
-                raise ApiError(422, "POD_BLANK_REFERENCE_REQUIRED", "商品主图必须提供胚件真实参考图")
+                raise ApiError(
+                    422, "POD_BLANK_REFERENCE_REQUIRED", "商品主图必须提供胚件真实参考图"
+                )
             try:
                 reference_asset_ids = [uuid.UUID(str(value)) for value in reference_ids]
                 blank_asset_ids = [uuid.UUID(str(value)) for value in blank_reference_ids]
@@ -1513,7 +1523,11 @@ class JobService:
                 if slot_row is None or slot_row[1].product_id != product.id:
                     raise ApiError(404, "POD_IMAGE_SLOT_NOT_FOUND", "图片槽位不存在")
                 slot, image_set = slot_row
-                if image_set.status != "active" or slot.scope != "product_specific" or not slot.requires_print:
+                if (
+                    image_set.status != "active"
+                    or slot.scope != "product_specific"
+                    or not slot.requires_print
+                ):
                     raise ApiError(422, "POD_IMAGE_SLOT_INVALID", "图片槽位不支持商品专属图生成")
                 if parameters.get("image_set_id") != str(image_set.id):
                     raise ApiError(422, "POD_IMAGE_SLOT_MISMATCH", "图片套组与槽位不匹配")
@@ -1529,19 +1543,24 @@ class JobService:
                 ).all()
             )
             expected_reference_ids = [*db_blank_asset_ids, master_asset_id]
-            if blank_asset_ids != db_blank_asset_ids or reference_asset_ids != expected_reference_ids:
+            if (
+                blank_asset_ids != db_blank_asset_ids
+                or reference_asset_ids != expected_reference_ids
+            ):
                 raise ApiError(
                     422,
                     "POD_VISUAL_REFERENCES_MISMATCH",
                     "商品主图必须直接使用当前胚件真实参考图及锁定的 Print Master",
                 )
             if reference_asset_ids[0] != source_id or reference_asset_ids[-1] != master_asset_id:
-                raise ApiError(422, "POD_VISUAL_REFERENCE_ORDER", "胚件必须为首图，Print Master 必须为最后一张参考图")
+                raise ApiError(
+                    422,
+                    "POD_VISUAL_REFERENCE_ORDER",
+                    "胚件必须为首图，Print Master 必须为最后一张参考图",
+                )
             assets = list(
                 (
-                    await session.scalars(
-                        select(Asset).where(Asset.id.in_(reference_asset_ids))
-                    )
+                    await session.scalars(select(Asset).where(Asset.id.in_(reference_asset_ids)))
                 ).all()
             )
             if len(assets) != len(reference_asset_ids) or any(
@@ -1573,11 +1592,19 @@ class JobService:
             slot, image_set = slot_row
             if image_set.status != "active" or slot.scope != "generic" or slot.requires_print:
                 raise ApiError(422, "POD_IMAGE_SLOT_INVALID", "图片槽位不支持通用视觉生成")
-            if parameters.get("image_set_id") != str(image_set.id) or parameters.get("image_slot_code") != slot.code:
+            if (
+                parameters.get("image_set_id") != str(image_set.id)
+                or parameters.get("image_slot_code") != slot.code
+            ):
                 raise ApiError(422, "POD_IMAGE_SLOT_MISMATCH", "图片套组与槽位不匹配")
             if source_id is not None or parameters.get("reference_asset_ids"):
-                raise ApiError(422, "INVALID_OPERATION_PARAMETERS", "通用商品视觉不接受图片来源参数")
-            if parameters.get("requires_print") is not False or parameters.get("scope") != "generic":
+                raise ApiError(
+                    422, "INVALID_OPERATION_PARAMETERS", "通用商品视觉不接受图片来源参数"
+                )
+            if (
+                parameters.get("requires_print") is not False
+                or parameters.get("scope") != "generic"
+            ):
                 raise ApiError(422, "POD_IMAGE_SLOT_INVALID", "通用商品视觉参数无效")
             if not isinstance(parameters.get("prompt"), str) or not parameters["prompt"].strip():
                 raise ApiError(422, "INVALID_OPERATION_PARAMETERS", "通用商品视觉缺少提示词")

@@ -136,7 +136,12 @@ Every visual inference must be clearly phrased as a suggestion. Do not invent su
 
 
 def product_ideas_instruction(
-    *, category: str, material: str, confirmed: dict[str, Any], suggested: dict[str, Any], count: int
+    *,
+    category: str,
+    material: str,
+    confirmed: dict[str, Any],
+    suggested: dict[str, Any],
+    count: int,
 ) -> str:
     return f"""Generate exactly {count} distinct POD Product Idea candidates for a US-market creative exploration workflow. They are candidates, not claims about current sales or trend data.
 
@@ -158,7 +163,12 @@ The concepts must change design structure (for example badge, central illustrati
 
 
 def product_copy_instruction(
-    *, category: str, material: str, confirmed: dict[str, Any], idea: dict[str, Any], design: dict[str, Any]
+    *,
+    category: str,
+    material: str,
+    confirmed: dict[str, Any],
+    idea: dict[str, Any],
+    design: dict[str, Any],
 ) -> str:
     return f"""Create original English (US) ecommerce copy for one POD product. This is drafting material for human review, not a claim of market performance, safety, fit, origin, dimensions, or legal clearance.
 
@@ -202,7 +212,12 @@ Render one standalone product image. Do not add logos, watermarks, invented labe
 
 
 def product_image_strategy_instruction(
-    *, category: str, material: str, confirmed: dict[str, Any], suggested: dict[str, Any], idea: dict[str, Any]
+    *,
+    category: str,
+    material: str,
+    confirmed: dict[str, Any],
+    suggested: dict[str, Any],
+    idea: dict[str, Any],
 ) -> str:
     return f"""Plan one practical ecommerce image set for an original POD product. This is a creative production plan, not a claim about market requirements.
 
@@ -218,7 +233,13 @@ Always include exactly one `product_main` slot with scope `product_specific` and
 
 
 def product_slot_visual_prompt(
-    *, blank_name: str, visual_style: dict[str, Any], title: str, scene: str, composition: str, style: str
+    *,
+    blank_name: str,
+    visual_style: dict[str, Any],
+    title: str,
+    scene: str,
+    composition: str,
+    style: str,
 ) -> str:
     base = product_visual_prompt(
         blank_name=blank_name,

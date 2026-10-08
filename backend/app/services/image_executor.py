@@ -133,9 +133,11 @@ class ImageJobExecutor:
         provider_request_id = None
         try:
             await self._progress(claim, 20)
-            count = int(claim.parameters.get("image_count", 1)) if claim.operation_code in {
-                "ai.ecommerce", "pod.print.generate"
-            } else 1
+            count = (
+                int(claim.parameters.get("image_count", 1))
+                if claim.operation_code in {"ai.ecommerce", "pod.print.generate"}
+                else 1
+            )
             async for output, extension, provider_request_id, metadata in self._outputs(
                 claim, source_data
             ):
@@ -358,9 +360,14 @@ class ImageJobExecutor:
                     reference_images=refs[1:],
                     prompt=self._required_text(parameters, "prompt"),
                     size=self._choice(
-                        parameters, "size", "1024x1024", {"auto", "1024x1024", "1024x1536", "1536x1024"}
+                        parameters,
+                        "size",
+                        "1024x1024",
+                        {"auto", "1024x1024", "1024x1536", "1536x1024"},
                     ),
-                    quality=self._choice(parameters, "quality", "high", {"auto", "low", "medium", "high"}),
+                    quality=self._choice(
+                        parameters, "quality", "high", {"auto", "low", "medium", "high"}
+                    ),
                     output_format="png",
                 ),
             )
@@ -391,9 +398,14 @@ class ImageJobExecutor:
                 lambda client: client.generate(
                     prompt=self._required_text(parameters, "prompt"),
                     size=self._choice(
-                        parameters, "size", "1024x1024", {"auto", "1024x1024", "1024x1536", "1536x1024"}
+                        parameters,
+                        "size",
+                        "1024x1024",
+                        {"auto", "1024x1024", "1024x1536", "1536x1024"},
                     ),
-                    quality=self._choice(parameters, "quality", "high", {"auto", "low", "medium", "high"}),
+                    quality=self._choice(
+                        parameters, "quality", "high", {"auto", "low", "medium", "high"}
+                    ),
                     output_format="png",
                 ),
             )
@@ -563,9 +575,14 @@ class ImageJobExecutor:
                     lambda client, index=index: client.generate(
                         prompt=print_prompt(parsed, index),
                         size=self._choice(
-                            claim.parameters, "size", "1024x1024", {"auto", "1024x1024", "1024x1536", "1536x1024"}
+                            claim.parameters,
+                            "size",
+                            "1024x1024",
+                            {"auto", "1024x1024", "1024x1536", "1536x1024"},
                         ),
-                        quality=self._choice(claim.parameters, "quality", "high", {"auto", "low", "medium", "high"}),
+                        quality=self._choice(
+                            claim.parameters, "quality", "high", {"auto", "low", "medium", "high"}
+                        ),
                         output_format="png",
                     ),
                 )

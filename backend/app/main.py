@@ -22,8 +22,8 @@ from .api.errors import install_exception_handlers
 from .api.jobs import router as jobs_router
 from .api.memberships import router as memberships_router
 from .api.middleware import RequestContextMiddleware
-from .api.points import router as points_router
 from .api.pod import router as pod_router
+from .api.points import router as points_router
 from .api.rbac import router as rbac_router
 from .api.security import router as security_router
 from .api.site import router as site_router

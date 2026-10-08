@@ -38,7 +38,9 @@ async def test_pod_blank_only_requires_category_and_material_then_locks_one_mast
     owner = await seed_user(asset_context, email="pod-owner@example.test")
     async with client_for(asset_context, "pod-owner") as client:
         await login(client, owner.email)
-        created = await client.post("/api/v1/pod/blanks", json={"category": "Blanket", "material": "Fleece"})
+        created = await client.post(
+            "/api/v1/pod/blanks", json={"category": "Blanket", "material": "Fleece"}
+        )
         assert created.status_code == 201, created.text
         blank = created.json()["blank"]
         assert blank["name"] == "Blanket / Fleece"
@@ -57,24 +59,53 @@ async def test_pod_blank_only_requires_category_and_material_then_locks_one_mast
 
     async with asset_context.database.session_factory() as session:
         idea = PodProductIdea(
-            id=uuid7(), project_id=uuid.UUID(project["id"]), generation_job_id=None,
-            generation_batch_id=uuid7(), idea_name="Cozy Reading", target_audience="Readers",
-            use_case="Living room", emotional_angle="Warm", design_theme="Books",
-            visual_direction="Illustration", recommended_style="Vintage", composition_direction="Center",
-            color_direction="Blue", core_elements=["book"], avoid_elements=["logos"], rationale="test",
-            infringement_risk={"risk_level": "low", "warnings": []}, status="adopted",
+            id=uuid7(),
+            project_id=uuid.UUID(project["id"]),
+            generation_job_id=None,
+            generation_batch_id=uuid7(),
+            idea_name="Cozy Reading",
+            target_audience="Readers",
+            use_case="Living room",
+            emotional_angle="Warm",
+            design_theme="Books",
+            visual_direction="Illustration",
+            recommended_style="Vintage",
+            composition_direction="Center",
+            color_direction="Blue",
+            core_elements=["book"],
+            avoid_elements=["logos"],
+            rationale="test",
+            infringement_risk={"risk_level": "low", "warnings": []},
+            status="adopted",
         )
         concept = PodDesignConcept(
-            id=uuid7(), product_idea_id=idea.id, generation_job_id=None, design_name="Badge",
-            visual_style="Vintage", composition="Central badge", layout="Centered", main_subject="Book",
-            secondary_elements=["stars"], color_palette="Blue", typography_direction="No text",
-            pattern_structure="Badge", print_method="DTG", recommended_print_area="Front",
-            texture_direction="Flat", background_direction="Transparent", negative_elements=["logos"],
-            design_prompt="Original flat book badge print with simple stars and no text.", status="adopted",
+            id=uuid7(),
+            product_idea_id=idea.id,
+            generation_job_id=None,
+            design_name="Badge",
+            visual_style="Vintage",
+            composition="Central badge",
+            layout="Centered",
+            main_subject="Book",
+            secondary_elements=["stars"],
+            color_palette="Blue",
+            typography_direction="No text",
+            pattern_structure="Badge",
+            print_method="DTG",
+            recommended_print_area="Front",
+            texture_direction="Flat",
+            background_direction="Transparent",
+            negative_elements=["logos"],
+            design_prompt="Original flat book badge print with simple stars and no text.",
+            status="adopted",
         )
         candidate = PodPrintCandidate(
-            id=uuid7(), design_concept_id=concept.id, asset_id=uuid.UUID(print_asset["id"]),
-            generation_job_id=None, prompt_snapshot={}, status="generated",
+            id=uuid7(),
+            design_concept_id=concept.id,
+            asset_id=uuid.UUID(print_asset["id"]),
+            generation_job_id=None,
+            prompt_snapshot={},
+            status="generated",
         )
         session.add(idea)
         await session.flush()
@@ -133,14 +164,24 @@ async def test_pod_product_visual_passes_blank_and_master_as_original_references
     executor = ImageJobExecutor(settings, None, None, sub2api=client)
     executor._references = AsyncMock(return_value=[b"blank", b"detail", b"print-master"])
     claim = ClaimedJob(
-        uuid.uuid4(), uuid.uuid4(), "pod.visual.generate", None,
+        uuid.uuid4(),
+        uuid.uuid4(),
+        "pod.visual.generate",
+        None,
         {
-            "prompt": "apply locked print", "size": "1024x1024", "quality": "high",
-            "blank_id": str(uuid.uuid4()), "project_id": str(uuid.uuid4()), "product_id": str(uuid.uuid4()),
-            "print_master_id": str(uuid.uuid4()), "print_master_asset_id": str(uuid.uuid4()),
+            "prompt": "apply locked print",
+            "size": "1024x1024",
+            "quality": "high",
+            "blank_id": str(uuid.uuid4()),
+            "project_id": str(uuid.uuid4()),
+            "product_id": str(uuid.uuid4()),
+            "print_master_id": str(uuid.uuid4()),
+            "print_master_asset_id": str(uuid.uuid4()),
             "blank_reference_asset_ids": [str(uuid.uuid4()), str(uuid.uuid4())],
         },
-        1, 480, 30,
+        1,
+        480,
+        30,
     )
     output, extension, _, metadata = await executor._execute(claim, None)
     assert output == b"visual" and extension == "png"
@@ -181,9 +222,14 @@ async def test_print_candidates_record_the_full_model_prompt_snapshot():
         "design_prompt": "Original flat book badge print with simple stars and no text.",
     }
     claim = ClaimedJob(
-        uuid.uuid4(), uuid.uuid4(), "pod.print.generate", None,
+        uuid.uuid4(),
+        uuid.uuid4(),
+        "pod.print.generate",
+        None,
         {"design_concept_id": str(concept_id), "design": design},
-        1, 480, 30,
+        1,
+        480,
+        30,
     )
     asset_ids = [uuid.uuid4(), uuid.uuid4()]
 
@@ -238,20 +284,45 @@ async def test_pod_image_set_slots_keep_blank_and_print_master_provenance(asset_
 
     async with asset_context.database.session_factory() as session:
         idea = PodProductIdea(
-            id=uuid7(), project_id=uuid.UUID(project["id"]), generation_job_id=None,
-            generation_batch_id=uuid7(), idea_name="Cozy Reading", target_audience="Readers",
-            use_case="Living room", emotional_angle="Warm", design_theme="Books",
-            visual_direction="Illustration", recommended_style="Vintage", composition_direction="Center",
-            color_direction="Blue", core_elements=["book"], avoid_elements=["logos"], rationale="test",
-            infringement_risk={"risk_level": "low", "warnings": []}, status="adopted",
+            id=uuid7(),
+            project_id=uuid.UUID(project["id"]),
+            generation_job_id=None,
+            generation_batch_id=uuid7(),
+            idea_name="Cozy Reading",
+            target_audience="Readers",
+            use_case="Living room",
+            emotional_angle="Warm",
+            design_theme="Books",
+            visual_direction="Illustration",
+            recommended_style="Vintage",
+            composition_direction="Center",
+            color_direction="Blue",
+            core_elements=["book"],
+            avoid_elements=["logos"],
+            rationale="test",
+            infringement_risk={"risk_level": "low", "warnings": []},
+            status="adopted",
         )
         concept = PodDesignConcept(
-            id=uuid7(), product_idea_id=idea.id, generation_job_id=None, design_name="Badge",
-            visual_style="Vintage", composition="Central badge", layout="Centered", main_subject="Book",
-            secondary_elements=["stars"], color_palette="Blue", typography_direction="No text",
-            pattern_structure="Badge", print_method="DTG", recommended_print_area="Front",
-            texture_direction="Flat", background_direction="Transparent", negative_elements=["logos"],
-            design_prompt="Original flat book badge print with simple stars and no text.", status="adopted",
+            id=uuid7(),
+            product_idea_id=idea.id,
+            generation_job_id=None,
+            design_name="Badge",
+            visual_style="Vintage",
+            composition="Central badge",
+            layout="Centered",
+            main_subject="Book",
+            secondary_elements=["stars"],
+            color_palette="Blue",
+            typography_direction="No text",
+            pattern_structure="Badge",
+            print_method="DTG",
+            recommended_print_area="Front",
+            texture_direction="Flat",
+            background_direction="Transparent",
+            negative_elements=["logos"],
+            design_prompt="Original flat book badge print with simple stars and no text.",
+            status="adopted",
         )
         session.add(idea)
         await session.flush()
@@ -352,8 +423,7 @@ async def test_pod_image_set_slots_keep_blank_and_print_master_provenance(asset_
 
     async with asset_context.database.session_factory() as session:
         jobs = [
-            await session.get(ImageJob, uuid.UUID(item["job_id"]))
-            for item in bulk.json()["jobs"]
+            await session.get(ImageJob, uuid.UUID(item["job_id"])) for item in bulk.json()["jobs"]
         ]
         assert all(job is not None for job in jobs)
         main_job = next(job for job in jobs if job.operation_code == "pod.visual.generate")
@@ -391,7 +461,12 @@ async def test_pod_image_set_slots_keep_blank_and_print_master_provenance(asset_
         await login(client, owner.email)
         premature_review = await client.post(
             "/api/v1/pod/reviews",
-            json={"target_type": "product", "target_id": product["id"], "gate": "G3", "decision": "approved"},
+            json={
+                "target_type": "product",
+                "target_id": product["id"],
+                "gate": "G3",
+                "decision": "approved",
+            },
         )
         assert premature_review.status_code == 409, premature_review.text
         assert premature_review.json()["code"] == "POD_PRODUCT_MAIN_VISUAL_REQUIRED"
@@ -423,18 +498,33 @@ async def test_pod_image_set_slots_keep_blank_and_print_master_provenance(asset_
         await login(client, owner.email)
         unreviewed_main = await client.post(
             "/api/v1/pod/reviews",
-            json={"target_type": "product", "target_id": product["id"], "gate": "G3", "decision": "approved"},
+            json={
+                "target_type": "product",
+                "target_id": product["id"],
+                "gate": "G3",
+                "decision": "approved",
+            },
         )
         assert unreviewed_main.status_code == 409, unreviewed_main.text
         assert unreviewed_main.json()["code"] == "POD_PRODUCT_MAIN_REVIEW_REQUIRED"
         image_review = await client.post(
             "/api/v1/pod/reviews",
-            json={"target_type": "image_slot", "target_id": str(main_slot_id), "gate": "G2", "decision": "approved"},
+            json={
+                "target_type": "image_slot",
+                "target_id": str(main_slot_id),
+                "gate": "G2",
+                "decision": "approved",
+            },
         )
         assert image_review.status_code == 201, image_review.text
         missing_copy = await client.post(
             "/api/v1/pod/reviews",
-            json={"target_type": "product", "target_id": product["id"], "gate": "G3", "decision": "approved"},
+            json={
+                "target_type": "product",
+                "target_id": product["id"],
+                "gate": "G3",
+                "decision": "approved",
+            },
         )
         assert missing_copy.status_code == 409, missing_copy.text
         assert missing_copy.json()["code"] == "POD_PRODUCT_COPY_REQUIRED"
@@ -445,15 +535,15 @@ async def test_pod_image_set_slots_keep_blank_and_print_master_provenance(asset_
         assert copy_job_response.status_code == 200, copy_job_response.text
 
     async with asset_context.database.session_factory() as session:
-        copy_job = await session.get(
-            ImageJob, uuid.UUID(copy_job_response.json()["job"]["job_id"])
-        )
+        copy_job = await session.get(ImageJob, uuid.UUID(copy_job_response.json()["job"]["job_id"]))
         assert copy_job is not None
         assert copy_job.operation_code == "pod.copy.generate"
         assert copy_job.source_asset_id is None
         assert copy_job.parameters == {"product_id": product["id"]}
 
-    copy_executor = PodJobExecutor(asset_context.settings, asset_context.database, asset_context.storage)
+    copy_executor = PodJobExecutor(
+        asset_context.settings, asset_context.database, asset_context.storage
+    )
     copy_executor._chat = AsyncMock(
         return_value=SimpleNamespace(
             content=json.dumps(
@@ -465,7 +555,13 @@ async def test_pod_image_set_slots_keep_blank_and_print_master_provenance(asset_
                         "A warm visual accent for reading spaces",
                         "Gift-ready direction for readers and book lovers",
                     ],
-                    "search_keywords": ["book lover blanket", "reading gift", "cozy home decor", "reader gift", "bookish blanket"],
+                    "search_keywords": [
+                        "book lover blanket",
+                        "reading gift",
+                        "cozy home decor",
+                        "reader gift",
+                        "bookish blanket",
+                    ],
                     "content_warnings": ["Confirm available sizes before listing."],
                 }
             ),
@@ -500,10 +596,18 @@ async def test_pod_image_set_slots_keep_blank_and_print_master_provenance(asset_
             json={"product_title": "Cozy Reading Fleece Blanket for Readers"},
         )
         assert edited.status_code == 200, edited.text
-        assert edited.json()["product_copy"]["product_title"] == "Cozy Reading Fleece Blanket for Readers"
+        assert (
+            edited.json()["product_copy"]["product_title"]
+            == "Cozy Reading Fleece Blanket for Readers"
+        )
         product_review = await client.post(
             "/api/v1/pod/reviews",
-            json={"target_type": "product", "target_id": product["id"], "gate": "G3", "decision": "approved"},
+            json={
+                "target_type": "product",
+                "target_id": product["id"],
+                "gate": "G3",
+                "decision": "approved",
+            },
         )
         assert product_review.status_code == 201, product_review.text
 

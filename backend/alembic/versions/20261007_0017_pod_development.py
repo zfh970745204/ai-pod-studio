@@ -42,7 +42,11 @@ def upgrade() -> None:
             CONSTRAINT uq_pod_blank_references_asset UNIQUE (blank_id, asset_id)
         )
     """)
-    op.create_index("ix_pod_blank_references_blank_order", "pod_blank_references", ["blank_id", "sort_order", "id"])
+    op.create_index(
+        "ix_pod_blank_references_blank_order",
+        "pod_blank_references",
+        ["blank_id", "sort_order", "id"],
+    )
 
     op.execute("""
         CREATE TABLE pod_development_projects (
@@ -57,8 +61,16 @@ def upgrade() -> None:
             CONSTRAINT ck_pod_development_projects_status CHECK (status IN ('draft', 'active', 'completed', 'archived'))
         )
     """)
-    op.create_index("ix_pod_projects_owner_created", "pod_development_projects", ["owner_id", "created_at", "id"])
-    op.create_index("ix_pod_projects_blank_created", "pod_development_projects", ["blank_id", "created_at", "id"])
+    op.create_index(
+        "ix_pod_projects_owner_created",
+        "pod_development_projects",
+        ["owner_id", "created_at", "id"],
+    )
+    op.create_index(
+        "ix_pod_projects_blank_created",
+        "pod_development_projects",
+        ["blank_id", "created_at", "id"],
+    )
 
     op.execute("""
         CREATE TABLE pod_product_ideas (
@@ -85,8 +97,16 @@ def upgrade() -> None:
             CONSTRAINT ck_pod_product_ideas_status CHECK (status IN ('proposed', 'adopted', 'archived'))
         )
     """)
-    op.create_index("ix_pod_product_ideas_project_status", "pod_product_ideas", ["project_id", "status", "created_at", "id"])
-    op.create_index("ix_pod_product_ideas_batch", "pod_product_ideas", ["generation_batch_id", "created_at", "id"])
+    op.create_index(
+        "ix_pod_product_ideas_project_status",
+        "pod_product_ideas",
+        ["project_id", "status", "created_at", "id"],
+    )
+    op.create_index(
+        "ix_pod_product_ideas_batch",
+        "pod_product_ideas",
+        ["generation_batch_id", "created_at", "id"],
+    )
 
     op.execute("""
         CREATE TABLE pod_design_concepts (
@@ -114,7 +134,11 @@ def upgrade() -> None:
             CONSTRAINT ck_pod_design_concepts_status CHECK (status IN ('proposed', 'adopted', 'archived'))
         )
     """)
-    op.create_index("ix_pod_design_concepts_idea_status", "pod_design_concepts", ["product_idea_id", "status", "created_at", "id"])
+    op.create_index(
+        "ix_pod_design_concepts_idea_status",
+        "pod_design_concepts",
+        ["product_idea_id", "status", "created_at", "id"],
+    )
 
     op.execute("""
         CREATE TABLE pod_print_candidates (
@@ -128,7 +152,11 @@ def upgrade() -> None:
             CONSTRAINT ck_pod_print_candidates_status CHECK (status IN ('generated', 'approved', 'rejected'))
         )
     """)
-    op.create_index("ix_pod_print_candidates_concept_created", "pod_print_candidates", ["design_concept_id", "created_at", "id"])
+    op.create_index(
+        "ix_pod_print_candidates_concept_created",
+        "pod_print_candidates",
+        ["design_concept_id", "created_at", "id"],
+    )
 
     op.execute("""
         CREATE TABLE pod_print_masters (
@@ -144,7 +172,9 @@ def upgrade() -> None:
             CONSTRAINT uq_pod_print_masters_candidate UNIQUE (print_candidate_id)
         )
     """)
-    op.execute("CREATE UNIQUE INDEX uq_pod_print_masters_project_active ON pod_print_masters (project_id) WHERE status = 'active'")
+    op.execute(
+        "CREATE UNIQUE INDEX uq_pod_print_masters_project_active ON pod_print_masters (project_id) WHERE status = 'active'"
+    )
 
     op.execute("""
         CREATE TABLE pod_products (
@@ -163,7 +193,9 @@ def upgrade() -> None:
             CONSTRAINT uq_pod_products_print_master UNIQUE (print_master_id)
         )
     """)
-    op.create_index("ix_pod_products_project_created", "pod_products", ["project_id", "created_at", "id"])
+    op.create_index(
+        "ix_pod_products_project_created", "pod_products", ["project_id", "created_at", "id"]
+    )
 
     op.execute("""
         CREATE TABLE pod_reviews (
@@ -179,14 +211,56 @@ def upgrade() -> None:
             CONSTRAINT ck_pod_reviews_decision CHECK (decision IN ('approved', 'rejected'))
         )
     """)
-    op.create_index("ix_pod_reviews_target", "pod_reviews", ["target_type", "target_id", "created_at", "id"])
+    op.create_index(
+        "ix_pod_reviews_target", "pod_reviews", ["target_type", "target_id", "created_at", "id"]
+    )
 
     for row in (
-        ("f0000000-0000-4000-8000-000000000019", "f0000000-0000-4000-8000-000000000024", "pod.blank.analyze", "AI 胚件理解", 2, 180, 2),
-        ("f0000000-0000-4000-8000-000000000020", "f0000000-0000-4000-8000-000000000025", "pod.idea.generate", "AI 产品创意", 4, 240, 2),
-        ("f0000000-0000-4000-8000-000000000021", "f0000000-0000-4000-8000-000000000026", "pod.design.generate", "AI 设计方案", 4, 240, 2),
-        ("f0000000-0000-4000-8000-000000000022", "f0000000-0000-4000-8000-000000000027", "pod.print.generate", "AI 印花候选", 20, 480, 2),
-        ("f0000000-0000-4000-8000-000000000023", "f0000000-0000-4000-8000-000000000028", "pod.visual.generate", "AI 商品主图", 20, 480, 2),
+        (
+            "f0000000-0000-4000-8000-000000000019",
+            "f0000000-0000-4000-8000-000000000024",
+            "pod.blank.analyze",
+            "AI 胚件理解",
+            2,
+            180,
+            2,
+        ),
+        (
+            "f0000000-0000-4000-8000-000000000020",
+            "f0000000-0000-4000-8000-000000000025",
+            "pod.idea.generate",
+            "AI 产品创意",
+            4,
+            240,
+            2,
+        ),
+        (
+            "f0000000-0000-4000-8000-000000000021",
+            "f0000000-0000-4000-8000-000000000026",
+            "pod.design.generate",
+            "AI 设计方案",
+            4,
+            240,
+            2,
+        ),
+        (
+            "f0000000-0000-4000-8000-000000000022",
+            "f0000000-0000-4000-8000-000000000027",
+            "pod.print.generate",
+            "AI 印花候选",
+            20,
+            480,
+            2,
+        ),
+        (
+            "f0000000-0000-4000-8000-000000000023",
+            "f0000000-0000-4000-8000-000000000028",
+            "pod.visual.generate",
+            "AI 商品主图",
+            20,
+            480,
+            2,
+        ),
     ):
         op.execute(
             sa.text("""
@@ -203,9 +277,17 @@ def upgrade() -> None:
                 AND NOT EXISTS (SELECT 1 FROM operation_prices WHERE operation_id = operation_catalog.id)
             """).bindparams(price_id=row[1], points=row[4], code=row[2])
         )
-    op.execute(sa.text("INSERT INTO schema_migrations (version) VALUES (:version)").bindparams(version=revision))
+    op.execute(
+        sa.text("INSERT INTO schema_migrations (version) VALUES (:version)").bindparams(
+            version=revision
+        )
+    )
 
 
 def downgrade() -> None:
     op.execute("UPDATE operation_catalog SET enabled = false WHERE code LIKE 'pod.%'")
-    op.execute(sa.text("DELETE FROM schema_migrations WHERE version = :version").bindparams(version=revision))
+    op.execute(
+        sa.text("DELETE FROM schema_migrations WHERE version = :version").bindparams(
+            version=revision
+        )
+    )

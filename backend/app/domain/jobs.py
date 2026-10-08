@@ -27,7 +27,9 @@ OPERATION_SEEDS = (
     OperationSeed("pod.idea.generate", "AI 产品创意", "sub2api", "image-jobs", 4, 240, 2),
     OperationSeed("pod.design.generate", "AI 设计方案", "sub2api", "image-jobs", 4, 240, 2),
     OperationSeed("pod.print.generate", "AI 印花候选", "sub2api", "image-jobs", 20, 480, 2),
-    OperationSeed("pod.image.strategy.generate", "AI 图片套组规划", "sub2api", "image-jobs", 3, 240, 2),
+    OperationSeed(
+        "pod.image.strategy.generate", "AI 图片套组规划", "sub2api", "image-jobs", 3, 240, 2
+    ),
     OperationSeed("pod.copy.generate", "AI 商品文案", "sub2api", "image-jobs", 3, 240, 2),
     OperationSeed("pod.visual.generate", "AI 商品主图", "sub2api", "image-jobs", 20, 480, 2),
     OperationSeed("pod.visual.generic", "AI 通用商品视觉", "sub2api", "image-jobs", 15, 480, 2),

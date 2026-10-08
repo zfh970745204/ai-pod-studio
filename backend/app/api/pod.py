@@ -116,8 +116,12 @@ class BulkIdeaStatus(PodPayload):
 
 
 class ProductVisualGenerate(PodPayload):
-    scene: str = Field(default="Clean light-neutral studio product photography", min_length=3, max_length=1000)
-    composition: str = Field(default="Full product hero view with the product centered", min_length=3, max_length=1000)
+    scene: str = Field(
+        default="Clean light-neutral studio product photography", min_length=3, max_length=1000
+    )
+    composition: str = Field(
+        default="Full product hero view with the product centered", min_length=3, max_length=1000
+    )
     size: str = Field(default="1024x1024", pattern="^(auto|1024x1024|1024x1536|1536x1024)$")
     quality: str = Field(default="high", pattern="^(auto|low|medium|high)$")
 
@@ -169,84 +173,138 @@ def _request_id(request: Request) -> str:
     return getattr(request.state, "request_id", None) or uuid7().hex
 
 
-def blank_payload(blank: PodBlank, references: list[PodBlankReference] | None = None) -> dict[str, Any]:
+def blank_payload(
+    blank: PodBlank, references: list[PodBlankReference] | None = None
+) -> dict[str, Any]:
     return {
-        "id": str(blank.id), "name": blank.name, "category": blank.category, "material": blank.material,
-        "confirmed_attributes": blank.confirmed_attributes, "suggested_attributes": blank.suggested_attributes,
-        "product_visual_style": blank.product_visual_style, "status": blank.status,
-        "created_at": blank.created_at, "updated_at": blank.updated_at,
+        "id": str(blank.id),
+        "name": blank.name,
+        "category": blank.category,
+        "material": blank.material,
+        "confirmed_attributes": blank.confirmed_attributes,
+        "suggested_attributes": blank.suggested_attributes,
+        "product_visual_style": blank.product_visual_style,
+        "status": blank.status,
+        "created_at": blank.created_at,
+        "updated_at": blank.updated_at,
         "references": [reference_payload(item) for item in references or []],
     }
 
 
 def reference_payload(reference: PodBlankReference) -> dict[str, Any]:
     return {
-        "id": str(reference.id), "asset_id": str(reference.asset_id), "reference_role": reference.reference_role,
-        "sort_order": reference.sort_order, "is_supplier_reference": reference.is_supplier_reference,
+        "id": str(reference.id),
+        "asset_id": str(reference.asset_id),
+        "reference_role": reference.reference_role,
+        "sort_order": reference.sort_order,
+        "is_supplier_reference": reference.is_supplier_reference,
         "created_at": reference.created_at,
     }
 
 
 def project_payload(project: PodDevelopmentProject) -> dict[str, Any]:
     return {
-        "id": str(project.id), "blank_id": str(project.blank_id), "name": project.name,
-        "status": project.status, "current_stage": project.current_stage,
-        "created_at": project.created_at, "updated_at": project.updated_at,
+        "id": str(project.id),
+        "blank_id": str(project.blank_id),
+        "name": project.name,
+        "status": project.status,
+        "current_stage": project.current_stage,
+        "created_at": project.created_at,
+        "updated_at": project.updated_at,
     }
 
 
 def idea_payload(idea: PodProductIdea) -> dict[str, Any]:
     return {
-        "id": str(idea.id), "project_id": str(idea.project_id), "generation_job_id": str(idea.generation_job_id) if idea.generation_job_id else None,
-        "generation_batch_id": str(idea.generation_batch_id), "idea_name": idea.idea_name,
-        "target_audience": idea.target_audience, "use_case": idea.use_case, "emotional_angle": idea.emotional_angle,
-        "design_theme": idea.design_theme, "visual_direction": idea.visual_direction,
-        "recommended_style": idea.recommended_style, "composition_direction": idea.composition_direction,
-        "color_direction": idea.color_direction, "core_elements": idea.core_elements,
-        "avoid_elements": idea.avoid_elements, "rationale": idea.rationale,
-        "infringement_risk": idea.infringement_risk, "status": idea.status,
-        "created_at": idea.created_at, "updated_at": idea.updated_at,
+        "id": str(idea.id),
+        "project_id": str(idea.project_id),
+        "generation_job_id": str(idea.generation_job_id) if idea.generation_job_id else None,
+        "generation_batch_id": str(idea.generation_batch_id),
+        "idea_name": idea.idea_name,
+        "target_audience": idea.target_audience,
+        "use_case": idea.use_case,
+        "emotional_angle": idea.emotional_angle,
+        "design_theme": idea.design_theme,
+        "visual_direction": idea.visual_direction,
+        "recommended_style": idea.recommended_style,
+        "composition_direction": idea.composition_direction,
+        "color_direction": idea.color_direction,
+        "core_elements": idea.core_elements,
+        "avoid_elements": idea.avoid_elements,
+        "rationale": idea.rationale,
+        "infringement_risk": idea.infringement_risk,
+        "status": idea.status,
+        "created_at": idea.created_at,
+        "updated_at": idea.updated_at,
     }
 
 
 def concept_payload(concept: PodDesignConcept) -> dict[str, Any]:
     return {
-        "id": str(concept.id), "product_idea_id": str(concept.product_idea_id),
+        "id": str(concept.id),
+        "product_idea_id": str(concept.product_idea_id),
         "generation_job_id": str(concept.generation_job_id) if concept.generation_job_id else None,
-        "design_name": concept.design_name, "visual_style": concept.visual_style,
-        "composition": concept.composition, "layout": concept.layout, "main_subject": concept.main_subject,
-        "secondary_elements": concept.secondary_elements, "color_palette": concept.color_palette,
-        "typography_direction": concept.typography_direction, "pattern_structure": concept.pattern_structure,
-        "print_method": concept.print_method, "recommended_print_area": concept.recommended_print_area,
-        "texture_direction": concept.texture_direction, "background_direction": concept.background_direction,
-        "negative_elements": concept.negative_elements, "design_prompt": concept.design_prompt,
-        "status": concept.status, "created_at": concept.created_at, "updated_at": concept.updated_at,
+        "design_name": concept.design_name,
+        "visual_style": concept.visual_style,
+        "composition": concept.composition,
+        "layout": concept.layout,
+        "main_subject": concept.main_subject,
+        "secondary_elements": concept.secondary_elements,
+        "color_palette": concept.color_palette,
+        "typography_direction": concept.typography_direction,
+        "pattern_structure": concept.pattern_structure,
+        "print_method": concept.print_method,
+        "recommended_print_area": concept.recommended_print_area,
+        "texture_direction": concept.texture_direction,
+        "background_direction": concept.background_direction,
+        "negative_elements": concept.negative_elements,
+        "design_prompt": concept.design_prompt,
+        "status": concept.status,
+        "created_at": concept.created_at,
+        "updated_at": concept.updated_at,
     }
 
 
 def candidate_payload(candidate: PodPrintCandidate) -> dict[str, Any]:
     return {
-        "id": str(candidate.id), "design_concept_id": str(candidate.design_concept_id), "asset_id": str(candidate.asset_id),
-        "generation_job_id": str(candidate.generation_job_id), "status": candidate.status,
+        "id": str(candidate.id),
+        "design_concept_id": str(candidate.design_concept_id),
+        "asset_id": str(candidate.asset_id),
+        "generation_job_id": str(candidate.generation_job_id),
+        "status": candidate.status,
         "created_at": candidate.created_at,
     }
 
 
 def master_payload(master: PodPrintMaster) -> dict[str, Any]:
     return {
-        "id": str(master.id), "project_id": str(master.project_id), "print_candidate_id": str(master.print_candidate_id),
-        "asset_id": str(master.asset_id), "version": master.version, "status": master.status,
-        "locked_by": str(master.locked_by), "locked_at": master.locked_at,
+        "id": str(master.id),
+        "project_id": str(master.project_id),
+        "print_candidate_id": str(master.print_candidate_id),
+        "asset_id": str(master.asset_id),
+        "version": master.version,
+        "status": master.status,
+        "locked_by": str(master.locked_by),
+        "locked_at": master.locked_at,
     }
 
 
 def product_payload(product: PodProduct) -> dict[str, Any]:
     return {
-        "id": str(product.id), "project_id": str(product.project_id), "product_idea_id": str(product.product_idea_id),
-        "design_concept_id": str(product.design_concept_id), "print_master_id": str(product.print_master_id),
-        "primary_visual_asset_id": str(product.primary_visual_asset_id) if product.primary_visual_asset_id else None,
-        "primary_visual_job_id": str(product.primary_visual_job_id) if product.primary_visual_job_id else None,
-        "status": product.status, "created_at": product.created_at, "updated_at": product.updated_at,
+        "id": str(product.id),
+        "project_id": str(product.project_id),
+        "product_idea_id": str(product.product_idea_id),
+        "design_concept_id": str(product.design_concept_id),
+        "print_master_id": str(product.print_master_id),
+        "primary_visual_asset_id": str(product.primary_visual_asset_id)
+        if product.primary_visual_asset_id
+        else None,
+        "primary_visual_job_id": str(product.primary_visual_job_id)
+        if product.primary_visual_job_id
+        else None,
+        "status": product.status,
+        "created_at": product.created_at,
+        "updated_at": product.updated_at,
     }
 
 
@@ -290,11 +348,15 @@ def image_slot_payload(slot: PodImageSlot) -> dict[str, Any]:
     }
 
 
-def image_set_payload(image_set: PodImageSet, slots: list[PodImageSlot] | None = None) -> dict[str, Any]:
+def image_set_payload(
+    image_set: PodImageSet, slots: list[PodImageSlot] | None = None
+) -> dict[str, Any]:
     return {
         "id": str(image_set.id),
         "product_id": str(image_set.product_id),
-        "generation_job_id": str(image_set.generation_job_id) if image_set.generation_job_id else None,
+        "generation_job_id": str(image_set.generation_job_id)
+        if image_set.generation_job_id
+        else None,
         "version": image_set.version,
         "strategy_snapshot": image_set.strategy_snapshot,
         "status": image_set.status,
@@ -311,7 +373,9 @@ async def _blank_or_404(session, blank_id: uuid.UUID, owner_id: uuid.UUID) -> Po
     return blank
 
 
-async def _project_or_404(session, project_id: uuid.UUID, owner_id: uuid.UUID) -> PodDevelopmentProject:
+async def _project_or_404(
+    session, project_id: uuid.UUID, owner_id: uuid.UUID
+) -> PodDevelopmentProject:
     project = await session.get(PodDevelopmentProject, project_id)
     if project is None or project.owner_id != owner_id:
         raise ApiError(404, "POD_PROJECT_NOT_FOUND", "开发项目不存在")
@@ -320,9 +384,9 @@ async def _project_or_404(session, project_id: uuid.UUID, owner_id: uuid.UUID) -
 
 async def _idea_or_404(session, idea_id: uuid.UUID, owner_id: uuid.UUID) -> PodProductIdea:
     result = await session.execute(
-        select(PodProductIdea).join(PodDevelopmentProject).where(
-            PodProductIdea.id == idea_id, PodDevelopmentProject.owner_id == owner_id
-        )
+        select(PodProductIdea)
+        .join(PodDevelopmentProject)
+        .where(PodProductIdea.id == idea_id, PodDevelopmentProject.owner_id == owner_id)
     )
     idea = result.scalar_one_or_none()
     if idea is None:
@@ -504,8 +568,13 @@ async def _slot_generation_spec(
 
 
 async def _submit_job(
-    *, request: Request, principal: Principal, operation_code: str, source_asset_id: uuid.UUID | None,
-    parameters: dict[str, Any], idempotency_key: str,
+    *,
+    request: Request,
+    principal: Principal,
+    operation_code: str,
+    source_asset_id: uuid.UUID | None,
+    parameters: dict[str, Any],
+    idempotency_key: str,
 ) -> dict[str, Any]:
     runtime = request.app.state.runtime_services
     request_id = _request_id(request)
@@ -519,36 +588,76 @@ async def _submit_job(
         )
         if existing is not None:
             if existing.operation_code != operation_code or existing.parameters != canonical:
-                raise ApiError(409, "IDEMPOTENCY_KEY_REUSED", "Idempotency-Key 已用于不同的 POD 任务")
-            return {"job_id": str(existing.id), "created": False, "dispatched": False, "status": existing.status}
+                raise ApiError(
+                    409, "IDEMPOTENCY_KEY_REUSED", "Idempotency-Key 已用于不同的 POD 任务"
+                )
+            return {
+                "job_id": str(existing.id),
+                "created": False,
+                "dispatched": False,
+                "status": existing.status,
+            }
         quote = await service.create_quote(
-            session, user_id=principal.user_id, operation_code=operation_code, source_asset_id=source_asset_id,
-            parameters=canonical, ttl_seconds=request.app.state.settings.job_quote_ttl_seconds, request_id=request_id,
+            session,
+            user_id=principal.user_id,
+            operation_code=operation_code,
+            source_asset_id=source_asset_id,
+            parameters=canonical,
+            ttl_seconds=request.app.state.settings.job_quote_ttl_seconds,
+            request_id=request_id,
         )
         job, created = await service.create_job(
-            session, user_id=principal.user_id, quote_id=quote.id, parameters=canonical,
+            session,
+            user_id=principal.user_id,
+            quote_id=quote.id,
+            parameters=canonical,
             idempotency_key=idempotency_key,
             request_fingerprint=service.request_fingerprint(principal.user_id, quote.id, canonical),
-            request_id=request_id, require_sub2api_config=not request.app.state.settings.legacy_sync_api_enabled,
+            request_id=request_id,
+            require_sub2api_config=not request.app.state.settings.legacy_sync_api_enabled,
         )
         await session.commit()
         await session.refresh(job)
     dispatched = await enqueue_job(request, job) if created else False
-    return {"job_id": str(job.id), "created": created, "dispatched": dispatched, "status": job.status}
+    return {
+        "job_id": str(job.id),
+        "created": created,
+        "dispatched": dispatched,
+        "status": job.status,
+    }
 
 
-def _record_event(session, *, topic: str, aggregate_id: uuid.UUID, owner_id: uuid.UUID, request_id: str, details: dict[str, Any]) -> None:
-    session.add(OutboxEvent(
-        id=uuid7(), topic=topic, aggregate_type="pod", aggregate_id=aggregate_id,
-        payload={"user_id": str(owner_id), "request_id": request_id, **details},
-        status="pending", attempts=0, available_at=datetime.now(UTC), version=1,
-    ))
+def _record_event(
+    session,
+    *,
+    topic: str,
+    aggregate_id: uuid.UUID,
+    owner_id: uuid.UUID,
+    request_id: str,
+    details: dict[str, Any],
+) -> None:
+    session.add(
+        OutboxEvent(
+            id=uuid7(),
+            topic=topic,
+            aggregate_type="pod",
+            aggregate_id=aggregate_id,
+            payload={"user_id": str(owner_id), "request_id": request_id, **details},
+            status="pending",
+            attempts=0,
+            available_at=datetime.now(UTC),
+            version=1,
+        )
+    )
 
 
 @router.get("/blanks")
 async def list_blanks(
-    request: Request, principal: PodReader, cursor: uuid.UUID | None = None,
-    limit: int = Query(default=20, ge=1, le=100), status_filter: str | None = Query(default=None, alias="status"),
+    request: Request,
+    principal: PodReader,
+    cursor: uuid.UUID | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    status_filter: str | None = Query(default=None, alias="status"),
 ) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         statement = select(PodBlank).where(PodBlank.owner_id == principal.user_id)
@@ -560,26 +669,69 @@ async def list_blanks(
             anchor = await session.get(PodBlank, cursor)
             if anchor is None or anchor.owner_id != principal.user_id:
                 raise ApiError(422, "INVALID_CURSOR", "分页游标无效")
-            statement = statement.where(or_(PodBlank.created_at < anchor.created_at, and_(PodBlank.created_at == anchor.created_at, PodBlank.id < anchor.id)))
-        rows = list((await session.scalars(statement.order_by(PodBlank.created_at.desc(), PodBlank.id.desc()).limit(limit + 1))).all())
+            statement = statement.where(
+                or_(
+                    PodBlank.created_at < anchor.created_at,
+                    and_(PodBlank.created_at == anchor.created_at, PodBlank.id < anchor.id),
+                )
+            )
+        rows = list(
+            (
+                await session.scalars(
+                    statement.order_by(PodBlank.created_at.desc(), PodBlank.id.desc()).limit(
+                        limit + 1
+                    )
+                )
+            ).all()
+        )
         items = rows[:limit]
-        references = list((await session.scalars(select(PodBlankReference).where(PodBlankReference.blank_id.in_([item.id for item in items])))).all()) if items else []
+        references = (
+            list(
+                (
+                    await session.scalars(
+                        select(PodBlankReference).where(
+                            PodBlankReference.blank_id.in_([item.id for item in items])
+                        )
+                    )
+                ).all()
+            )
+            if items
+            else []
+        )
     grouped: dict[uuid.UUID, list[PodBlankReference]] = {}
     for reference in references:
         grouped.setdefault(reference.blank_id, []).append(reference)
-    return {"items": [blank_payload(item, grouped.get(item.id, [])) for item in items], "next_cursor": str(items[-1].id) if len(rows) > limit and items else None}
+    return {
+        "items": [blank_payload(item, grouped.get(item.id, [])) for item in items],
+        "next_cursor": str(items[-1].id) if len(rows) > limit and items else None,
+    }
 
 
 @router.post("/blanks", status_code=status.HTTP_201_CREATED)
-async def create_blank(payload: BlankCreate, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def create_blank(
+    payload: BlankCreate, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         blank = PodBlank(
-            id=uuid7(), owner_id=principal.user_id, name=payload.name or f"{payload.category} / {payload.material}",
-            category=payload.category, material=payload.material, confirmed_attributes=payload.confirmed_attributes,
-            suggested_attributes={}, product_visual_style=payload.product_visual_style, status="active",
+            id=uuid7(),
+            owner_id=principal.user_id,
+            name=payload.name or f"{payload.category} / {payload.material}",
+            category=payload.category,
+            material=payload.material,
+            confirmed_attributes=payload.confirmed_attributes,
+            suggested_attributes={},
+            product_visual_style=payload.product_visual_style,
+            status="active",
         )
         session.add(blank)
-        _record_event(session, topic="pod.blank.created", aggregate_id=blank.id, owner_id=principal.user_id, request_id=_request_id(request), details={"category": blank.category})
+        _record_event(
+            session,
+            topic="pod.blank.created",
+            aggregate_id=blank.id,
+            owner_id=principal.user_id,
+            request_id=_request_id(request),
+            details={"category": blank.category},
+        )
         await session.commit()
         await session.refresh(blank)
     return {"blank": blank_payload(blank)}
@@ -589,28 +741,52 @@ async def create_blank(payload: BlankCreate, request: Request, principal: PodWri
 async def get_blank(blank_id: uuid.UUID, request: Request, principal: PodReader) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         blank = await _blank_or_404(session, blank_id, principal.user_id)
-        references = list((await session.scalars(select(PodBlankReference).where(PodBlankReference.blank_id == blank.id).order_by(PodBlankReference.sort_order, PodBlankReference.id))).all())
+        references = list(
+            (
+                await session.scalars(
+                    select(PodBlankReference)
+                    .where(PodBlankReference.blank_id == blank.id)
+                    .order_by(PodBlankReference.sort_order, PodBlankReference.id)
+                )
+            ).all()
+        )
     return {"blank": blank_payload(blank, references)}
 
 
 @router.patch("/blanks/{blank_id}")
-async def update_blank(blank_id: uuid.UUID, payload: BlankPatch, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def update_blank(
+    blank_id: uuid.UUID, payload: BlankPatch, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         blank = await _blank_or_404(session, blank_id, principal.user_id)
         for field in payload.model_fields_set:
             setattr(blank, field, getattr(payload, field))
-        _record_event(session, topic="pod.blank.updated", aggregate_id=blank.id, owner_id=principal.user_id, request_id=_request_id(request), details={"fields": sorted(payload.model_fields_set)})
+        _record_event(
+            session,
+            topic="pod.blank.updated",
+            aggregate_id=blank.id,
+            owner_id=principal.user_id,
+            request_id=_request_id(request),
+            details={"fields": sorted(payload.model_fields_set)},
+        )
         await session.commit()
         await session.refresh(blank)
     return {"blank": blank_payload(blank)}
 
 
 @router.post("/blanks/{blank_id}/references", status_code=status.HTTP_201_CREATED)
-async def add_blank_reference(blank_id: uuid.UUID, payload: ReferenceCreate, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def add_blank_reference(
+    blank_id: uuid.UUID, payload: ReferenceCreate, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         blank = await _blank_or_404(session, blank_id, principal.user_id)
         await AssetService().require_usable(session, payload.asset_id, owner_id=principal.user_id)
-        exists = await session.scalar(select(PodBlankReference.id).where(PodBlankReference.blank_id == blank.id, PodBlankReference.asset_id == payload.asset_id))
+        exists = await session.scalar(
+            select(PodBlankReference.id).where(
+                PodBlankReference.blank_id == blank.id,
+                PodBlankReference.asset_id == payload.asset_id,
+            )
+        )
         if exists:
             raise ApiError(409, "POD_REFERENCE_EXISTS", "该素材已关联到胚件")
         reference = PodBlankReference(id=uuid7(), blank_id=blank.id, **payload.model_dump())
@@ -621,161 +797,377 @@ async def add_blank_reference(blank_id: uuid.UUID, payload: ReferenceCreate, req
 
 
 @router.post("/blanks/{blank_id}/analysis")
-async def analyze_blank(blank_id: uuid.UUID, request: Request, principal: PodWriter, idempotency_key: IdempotencyKey) -> dict[str, Any]:
+async def analyze_blank(
+    blank_id: uuid.UUID, request: Request, principal: PodWriter, idempotency_key: IdempotencyKey
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         blank = await _blank_or_404(session, blank_id, principal.user_id)
-        source = await session.scalar(select(PodBlankReference.asset_id).where(PodBlankReference.blank_id == blank.id).order_by(PodBlankReference.sort_order, PodBlankReference.id).limit(1))
+        source = await session.scalar(
+            select(PodBlankReference.asset_id)
+            .where(PodBlankReference.blank_id == blank.id)
+            .order_by(PodBlankReference.sort_order, PodBlankReference.id)
+            .limit(1)
+        )
         if source is None:
             raise ApiError(422, "POD_BLANK_REFERENCE_REQUIRED", "请先上传并关联真实胚件参考图")
-    job = await _submit_job(request=request, principal=principal, operation_code="pod.blank.analyze", source_asset_id=source, parameters={"blank_id": str(blank_id)}, idempotency_key=idempotency_key)
+    job = await _submit_job(
+        request=request,
+        principal=principal,
+        operation_code="pod.blank.analyze",
+        source_asset_id=source,
+        parameters={"blank_id": str(blank_id)},
+        idempotency_key=idempotency_key,
+    )
     return {"job": job}
 
 
 @router.get("/projects")
-async def list_projects(request: Request, principal: PodReader, cursor: uuid.UUID | None = None, limit: int = Query(default=20, ge=1, le=100)) -> dict[str, Any]:
+async def list_projects(
+    request: Request,
+    principal: PodReader,
+    cursor: uuid.UUID | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
-        statement = select(PodDevelopmentProject).where(PodDevelopmentProject.owner_id == principal.user_id)
+        statement = select(PodDevelopmentProject).where(
+            PodDevelopmentProject.owner_id == principal.user_id
+        )
         if cursor:
             anchor = await session.get(PodDevelopmentProject, cursor)
             if anchor is None or anchor.owner_id != principal.user_id:
                 raise ApiError(422, "INVALID_CURSOR", "分页游标无效")
-            statement = statement.where(or_(PodDevelopmentProject.created_at < anchor.created_at, and_(PodDevelopmentProject.created_at == anchor.created_at, PodDevelopmentProject.id < anchor.id)))
-        rows = list((await session.scalars(statement.order_by(PodDevelopmentProject.created_at.desc(), PodDevelopmentProject.id.desc()).limit(limit + 1))).all())
+            statement = statement.where(
+                or_(
+                    PodDevelopmentProject.created_at < anchor.created_at,
+                    and_(
+                        PodDevelopmentProject.created_at == anchor.created_at,
+                        PodDevelopmentProject.id < anchor.id,
+                    ),
+                )
+            )
+        rows = list(
+            (
+                await session.scalars(
+                    statement.order_by(
+                        PodDevelopmentProject.created_at.desc(), PodDevelopmentProject.id.desc()
+                    ).limit(limit + 1)
+                )
+            ).all()
+        )
         items = rows[:limit]
-    return {"items": [project_payload(item) for item in items], "next_cursor": str(items[-1].id) if len(rows) > limit and items else None}
+    return {
+        "items": [project_payload(item) for item in items],
+        "next_cursor": str(items[-1].id) if len(rows) > limit and items else None,
+    }
 
 
 @router.post("/projects", status_code=status.HTTP_201_CREATED)
-async def create_project(payload: ProjectCreate, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def create_project(
+    payload: ProjectCreate, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         blank = await _blank_or_404(session, payload.blank_id, principal.user_id)
-        project = PodDevelopmentProject(id=uuid7(), owner_id=principal.user_id, blank_id=blank.id, name=payload.name or f"{blank.name} 产品开发", status="draft", current_stage="blank")
+        project = PodDevelopmentProject(
+            id=uuid7(),
+            owner_id=principal.user_id,
+            blank_id=blank.id,
+            name=payload.name or f"{blank.name} 产品开发",
+            status="draft",
+            current_stage="blank",
+        )
         session.add(project)
-        _record_event(session, topic="pod.project.created", aggregate_id=project.id, owner_id=principal.user_id, request_id=_request_id(request), details={"blank_id": str(blank.id)})
+        _record_event(
+            session,
+            topic="pod.project.created",
+            aggregate_id=project.id,
+            owner_id=principal.user_id,
+            request_id=_request_id(request),
+            details={"blank_id": str(blank.id)},
+        )
         await session.commit()
         await session.refresh(project)
     return {"project": project_payload(project)}
 
 
 @router.get("/projects/{project_id}")
-async def get_project(project_id: uuid.UUID, request: Request, principal: PodReader) -> dict[str, Any]:
+async def get_project(
+    project_id: uuid.UUID, request: Request, principal: PodReader
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         project = await _project_or_404(session, project_id, principal.user_id)
         blank = await _blank_or_404(session, project.blank_id, principal.user_id)
-        references = list((await session.scalars(select(PodBlankReference).where(PodBlankReference.blank_id == blank.id).order_by(PodBlankReference.sort_order, PodBlankReference.id))).all())
-        ideas = list((await session.scalars(select(PodProductIdea).where(PodProductIdea.project_id == project.id).order_by(PodProductIdea.created_at.desc(), PodProductIdea.id.desc()).limit(100))).all())
-        concepts = list((await session.scalars(select(PodDesignConcept).join(PodProductIdea).where(PodProductIdea.project_id == project.id).order_by(PodDesignConcept.created_at.desc(), PodDesignConcept.id.desc()).limit(200))).all())
-        candidates = list((await session.scalars(select(PodPrintCandidate).join(PodDesignConcept).join(PodProductIdea).where(PodProductIdea.project_id == project.id).order_by(PodPrintCandidate.created_at.desc(), PodPrintCandidate.id.desc()).limit(200))).all())
-        master = await session.scalar(select(PodPrintMaster).where(PodPrintMaster.project_id == project.id, PodPrintMaster.status == "active"))
-        products = list((await session.scalars(select(PodProduct).where(PodProduct.project_id == project.id).order_by(PodProduct.created_at.desc()))).all())
-        image_sets = list(
+        references = list(
             (
                 await session.scalars(
-                    select(PodImageSet)
-                    .where(PodImageSet.product_id.in_([item.id for item in products]))
-                    .order_by(PodImageSet.product_id, PodImageSet.version.desc())
+                    select(PodBlankReference)
+                    .where(PodBlankReference.blank_id == blank.id)
+                    .order_by(PodBlankReference.sort_order, PodBlankReference.id)
                 )
             ).all()
-        ) if products else []
-        slots = list(
+        )
+        ideas = list(
             (
                 await session.scalars(
-                    select(PodImageSlot)
-                    .where(PodImageSlot.image_set_id.in_([item.id for item in image_sets]))
-                    .order_by(PodImageSlot.sort_order, PodImageSlot.id)
+                    select(PodProductIdea)
+                    .where(PodProductIdea.project_id == project.id)
+                    .order_by(PodProductIdea.created_at.desc(), PodProductIdea.id.desc())
+                    .limit(100)
                 )
             ).all()
-        ) if image_sets else []
-        copies = list(
+        )
+        concepts = list(
             (
                 await session.scalars(
-                    select(PodProductCopy)
-                    .where(PodProductCopy.product_id.in_([item.id for item in products]))
-                    .order_by(PodProductCopy.product_id, PodProductCopy.version.desc())
+                    select(PodDesignConcept)
+                    .join(PodProductIdea)
+                    .where(PodProductIdea.project_id == project.id)
+                    .order_by(PodDesignConcept.created_at.desc(), PodDesignConcept.id.desc())
+                    .limit(200)
                 )
             ).all()
-        ) if products else []
+        )
+        candidates = list(
+            (
+                await session.scalars(
+                    select(PodPrintCandidate)
+                    .join(PodDesignConcept)
+                    .join(PodProductIdea)
+                    .where(PodProductIdea.project_id == project.id)
+                    .order_by(PodPrintCandidate.created_at.desc(), PodPrintCandidate.id.desc())
+                    .limit(200)
+                )
+            ).all()
+        )
+        master = await session.scalar(
+            select(PodPrintMaster).where(
+                PodPrintMaster.project_id == project.id, PodPrintMaster.status == "active"
+            )
+        )
+        products = list(
+            (
+                await session.scalars(
+                    select(PodProduct)
+                    .where(PodProduct.project_id == project.id)
+                    .order_by(PodProduct.created_at.desc())
+                )
+            ).all()
+        )
+        image_sets = (
+            list(
+                (
+                    await session.scalars(
+                        select(PodImageSet)
+                        .where(PodImageSet.product_id.in_([item.id for item in products]))
+                        .order_by(PodImageSet.product_id, PodImageSet.version.desc())
+                    )
+                ).all()
+            )
+            if products
+            else []
+        )
+        slots = (
+            list(
+                (
+                    await session.scalars(
+                        select(PodImageSlot)
+                        .where(PodImageSlot.image_set_id.in_([item.id for item in image_sets]))
+                        .order_by(PodImageSlot.sort_order, PodImageSlot.id)
+                    )
+                ).all()
+            )
+            if image_sets
+            else []
+        )
+        copies = (
+            list(
+                (
+                    await session.scalars(
+                        select(PodProductCopy)
+                        .where(PodProductCopy.product_id.in_([item.id for item in products]))
+                        .order_by(PodProductCopy.product_id, PodProductCopy.version.desc())
+                    )
+                ).all()
+            )
+            if products
+            else []
+        )
     slots_by_set: dict[uuid.UUID, list[PodImageSlot]] = {}
     for slot in slots:
         slots_by_set.setdefault(slot.image_set_id, []).append(slot)
-    return {"project": project_payload(project), "blank": blank_payload(blank, references), "ideas": [idea_payload(item) for item in ideas], "design_concepts": [concept_payload(item) for item in concepts], "print_candidates": [candidate_payload(item) for item in candidates], "print_master": master_payload(master) if master else None, "products": [product_payload(item) for item in products], "image_sets": [image_set_payload(item, slots_by_set.get(item.id, [])) for item in image_sets], "product_copies": [product_copy_payload(item) for item in copies]}
+    return {
+        "project": project_payload(project),
+        "blank": blank_payload(blank, references),
+        "ideas": [idea_payload(item) for item in ideas],
+        "design_concepts": [concept_payload(item) for item in concepts],
+        "print_candidates": [candidate_payload(item) for item in candidates],
+        "print_master": master_payload(master) if master else None,
+        "products": [product_payload(item) for item in products],
+        "image_sets": [
+            image_set_payload(item, slots_by_set.get(item.id, [])) for item in image_sets
+        ],
+        "product_copies": [product_copy_payload(item) for item in copies],
+    }
 
 
 @router.post("/projects/{project_id}/ideas/generate")
-async def generate_ideas(project_id: uuid.UUID, payload: GenerateIdeas, request: Request, principal: PodWriter, idempotency_key: IdempotencyKey) -> dict[str, Any]:
+async def generate_ideas(
+    project_id: uuid.UUID,
+    payload: GenerateIdeas,
+    request: Request,
+    principal: PodWriter,
+    idempotency_key: IdempotencyKey,
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         await _project_or_404(session, project_id, principal.user_id)
-    job = await _submit_job(request=request, principal=principal, operation_code="pod.idea.generate", source_asset_id=None, parameters={"project_id": str(project_id), "count": payload.count}, idempotency_key=idempotency_key)
+    job = await _submit_job(
+        request=request,
+        principal=principal,
+        operation_code="pod.idea.generate",
+        source_asset_id=None,
+        parameters={"project_id": str(project_id), "count": payload.count},
+        idempotency_key=idempotency_key,
+    )
     return {"job": job}
 
 
 @router.patch("/ideas/{idea_id}")
-async def update_idea(idea_id: uuid.UUID, payload: IdeaStatusPatch, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def update_idea(
+    idea_id: uuid.UUID, payload: IdeaStatusPatch, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         idea = await _idea_or_404(session, idea_id, principal.user_id)
         idea.status = payload.status
-        _record_event(session, topic="pod.idea.status_changed", aggregate_id=idea.id, owner_id=principal.user_id, request_id=_request_id(request), details={"status": idea.status})
-        await session.commit(); await session.refresh(idea)
+        _record_event(
+            session,
+            topic="pod.idea.status_changed",
+            aggregate_id=idea.id,
+            owner_id=principal.user_id,
+            request_id=_request_id(request),
+            details={"status": idea.status},
+        )
+        await session.commit()
+        await session.refresh(idea)
     return {"idea": idea_payload(idea)}
 
 
 @router.post("/ideas/bulk-status")
-async def bulk_update_ideas(payload: BulkIdeaStatus, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def bulk_update_ideas(
+    payload: BulkIdeaStatus, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     if len(set(payload.idea_ids)) != len(payload.idea_ids):
         raise ApiError(422, "DUPLICATE_IDS", "不能重复选择创意")
     async with request.app.state.runtime_services.database.session_factory() as session:
-        ideas = list((await session.scalars(select(PodProductIdea).join(PodDevelopmentProject).where(PodProductIdea.id.in_(payload.idea_ids), PodDevelopmentProject.owner_id == principal.user_id))).all())
+        ideas = list(
+            (
+                await session.scalars(
+                    select(PodProductIdea)
+                    .join(PodDevelopmentProject)
+                    .where(
+                        PodProductIdea.id.in_(payload.idea_ids),
+                        PodDevelopmentProject.owner_id == principal.user_id,
+                    )
+                )
+            ).all()
+        )
         if len(ideas) != len(payload.idea_ids):
             raise ApiError(404, "POD_IDEA_NOT_FOUND", "部分产品创意不存在")
-        for idea in ideas: idea.status = payload.status
+        for idea in ideas:
+            idea.status = payload.status
         await session.commit()
     return {"updated": len(ideas), "status": payload.status}
 
 
 @router.post("/ideas/{idea_id}/design-concepts/generate")
-async def generate_designs(idea_id: uuid.UUID, payload: GenerateDesigns, request: Request, principal: PodWriter, idempotency_key: IdempotencyKey) -> dict[str, Any]:
+async def generate_designs(
+    idea_id: uuid.UUID,
+    payload: GenerateDesigns,
+    request: Request,
+    principal: PodWriter,
+    idempotency_key: IdempotencyKey,
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         idea = await _idea_or_404(session, idea_id, principal.user_id)
-        if idea.status != "adopted": raise ApiError(409, "POD_IDEA_NOT_ADOPTED", "请先采用产品创意")
-    job = await _submit_job(request=request, principal=principal, operation_code="pod.design.generate", source_asset_id=None, parameters={"product_idea_id": str(idea_id), "count": payload.count}, idempotency_key=idempotency_key)
+        if idea.status != "adopted":
+            raise ApiError(409, "POD_IDEA_NOT_ADOPTED", "请先采用产品创意")
+    job = await _submit_job(
+        request=request,
+        principal=principal,
+        operation_code="pod.design.generate",
+        source_asset_id=None,
+        parameters={"product_idea_id": str(idea_id), "count": payload.count},
+        idempotency_key=idempotency_key,
+    )
     return {"job": job}
 
 
 @router.patch("/design-concepts/{concept_id}")
-async def update_concept(concept_id: uuid.UUID, payload: DesignStatusPatch, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def update_concept(
+    concept_id: uuid.UUID, payload: DesignStatusPatch, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         concept = await _concept_or_404(session, concept_id, principal.user_id)
         concept.status = payload.status
-        await session.commit(); await session.refresh(concept)
+        await session.commit()
+        await session.refresh(concept)
     return {"design_concept": concept_payload(concept)}
 
 
 @router.post("/design-concepts/{concept_id}/print-candidates/generate")
-async def generate_prints(concept_id: uuid.UUID, request: Request, principal: PodWriter, idempotency_key: IdempotencyKey) -> dict[str, Any]:
+async def generate_prints(
+    concept_id: uuid.UUID, request: Request, principal: PodWriter, idempotency_key: IdempotencyKey
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         concept = await _concept_or_404(session, concept_id, principal.user_id)
-        if concept.status != "adopted": raise ApiError(409, "POD_DESIGN_NOT_ADOPTED", "请先采用设计方案")
-        design = DesignConceptDraft.model_validate({field: getattr(concept, field) for field in DesignConceptDraft.model_fields})
-    job = await _submit_job(request=request, principal=principal, operation_code="pod.print.generate", source_asset_id=None, parameters={"design_concept_id": str(concept_id), "design": design.model_dump(), "image_count": 4, "quality": "high", "size": "1024x1024"}, idempotency_key=idempotency_key)
+        if concept.status != "adopted":
+            raise ApiError(409, "POD_DESIGN_NOT_ADOPTED", "请先采用设计方案")
+        design = DesignConceptDraft.model_validate(
+            {field: getattr(concept, field) for field in DesignConceptDraft.model_fields}
+        )
+    job = await _submit_job(
+        request=request,
+        principal=principal,
+        operation_code="pod.print.generate",
+        source_asset_id=None,
+        parameters={
+            "design_concept_id": str(concept_id),
+            "design": design.model_dump(),
+            "image_count": 4,
+            "quality": "high",
+            "size": "1024x1024",
+        },
+        idempotency_key=idempotency_key,
+    )
     return {"job": job}
 
 
 @router.post("/print-candidates/{candidate_id}/approve-master", status_code=status.HTTP_201_CREATED)
-async def approve_print_master(candidate_id: uuid.UUID, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def approve_print_master(
+    candidate_id: uuid.UUID, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         row = await session.execute(
             select(PodPrintCandidate, PodDesignConcept, PodProductIdea, PodDevelopmentProject)
             .join(PodDesignConcept, PodDesignConcept.id == PodPrintCandidate.design_concept_id)
             .join(PodProductIdea, PodProductIdea.id == PodDesignConcept.product_idea_id)
             .join(PodDevelopmentProject, PodDevelopmentProject.id == PodProductIdea.project_id)
-            .where(PodPrintCandidate.id == candidate_id, PodDevelopmentProject.owner_id == principal.user_id)
+            .where(
+                PodPrintCandidate.id == candidate_id,
+                PodDevelopmentProject.owner_id == principal.user_id,
+            )
             .with_for_update()
         )
         result = row.one_or_none()
-        if result is None: raise ApiError(404, "POD_PRINT_CANDIDATE_NOT_FOUND", "印花候选不存在")
+        if result is None:
+            raise ApiError(404, "POD_PRINT_CANDIDATE_NOT_FOUND", "印花候选不存在")
         candidate, concept, idea, project = result
-        if candidate.status != "generated" or concept.status != "adopted" or idea.status != "adopted":
-            raise ApiError(409, "POD_PRINT_CANDIDATE_NOT_READY", "印花候选所属创意和设计方案必须已采用")
+        if (
+            candidate.status != "generated"
+            or concept.status != "adopted"
+            or idea.status != "adopted"
+        ):
+            raise ApiError(
+                409, "POD_PRINT_CANDIDATE_NOT_READY", "印花候选所属创意和设计方案必须已采用"
+            )
         is_blank_reference = await session.scalar(
             select(PodBlankReference.id).where(
                 PodBlankReference.blank_id == project.blank_id,
@@ -788,14 +1180,47 @@ async def approve_print_master(candidate_id: uuid.UUID, request: Request, princi
                 "POD_PRINT_MASTER_MUST_BE_SEPARATE",
                 "Print Master 不能使用胚件真实参考图素材",
             )
-        active = await session.scalar(select(PodPrintMaster).where(PodPrintMaster.project_id == project.id, PodPrintMaster.status == "active").with_for_update())
-        if active is not None: raise ApiError(409, "POD_PRINT_MASTER_EXISTS", "该项目已有锁定的 Print Master")
-        master = PodPrintMaster(id=uuid7(), project_id=project.id, print_candidate_id=candidate.id, asset_id=candidate.asset_id, version=1, status="active", locked_by=principal.user_id, locked_at=datetime.now(UTC))
-        product = PodProduct(id=uuid7(), owner_id=principal.user_id, project_id=project.id, product_idea_id=idea.id, design_concept_id=concept.id, print_master_id=master.id, status="drafting")
-        candidate.status = "approved"; project.current_stage = "print_master"; project.status = "active"
+        active = await session.scalar(
+            select(PodPrintMaster)
+            .where(PodPrintMaster.project_id == project.id, PodPrintMaster.status == "active")
+            .with_for_update()
+        )
+        if active is not None:
+            raise ApiError(409, "POD_PRINT_MASTER_EXISTS", "该项目已有锁定的 Print Master")
+        master = PodPrintMaster(
+            id=uuid7(),
+            project_id=project.id,
+            print_candidate_id=candidate.id,
+            asset_id=candidate.asset_id,
+            version=1,
+            status="active",
+            locked_by=principal.user_id,
+            locked_at=datetime.now(UTC),
+        )
+        product = PodProduct(
+            id=uuid7(),
+            owner_id=principal.user_id,
+            project_id=project.id,
+            product_idea_id=idea.id,
+            design_concept_id=concept.id,
+            print_master_id=master.id,
+            status="drafting",
+        )
+        candidate.status = "approved"
+        project.current_stage = "print_master"
+        project.status = "active"
         session.add_all([master, product])
-        _record_event(session, topic="pod.print_master.locked", aggregate_id=master.id, owner_id=principal.user_id, request_id=_request_id(request), details={"project_id": str(project.id), "candidate_id": str(candidate.id)})
-        await session.commit(); await session.refresh(master); await session.refresh(product)
+        _record_event(
+            session,
+            topic="pod.print_master.locked",
+            aggregate_id=master.id,
+            owner_id=principal.user_id,
+            request_id=_request_id(request),
+            details={"project_id": str(project.id), "candidate_id": str(candidate.id)},
+        )
+        await session.commit()
+        await session.refresh(master)
+        await session.refresh(product)
     return {"print_master": master_payload(master), "product": product_payload(product)}
 
 
@@ -890,7 +1315,11 @@ async def _submit_image_slot_generation(
             aggregate_id=slot.id,
             owner_id=principal.user_id,
             request_id=_request_id(request),
-            details={"product_id": str(product_id), "job_id": job["job_id"], "slot_code": slot.code},
+            details={
+                "product_id": str(product_id),
+                "job_id": job["job_id"],
+                "slot_code": slot.code,
+            },
         )
         await session.commit()
     return {"job": job}
@@ -1027,15 +1456,31 @@ async def archive_product_copy(
 
 
 @router.post("/products/{product_id}/primary-visual/generate")
-async def generate_primary_visual(product_id: uuid.UUID, payload: ProductVisualGenerate, request: Request, principal: PodWriter, idempotency_key: IdempotencyKey) -> dict[str, Any]:
+async def generate_primary_visual(
+    product_id: uuid.UUID,
+    payload: ProductVisualGenerate,
+    request: Request,
+    principal: PodWriter,
+    idempotency_key: IdempotencyKey,
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         product = await session.get(PodProduct, product_id)
-        if product is None or product.owner_id != principal.user_id: raise ApiError(404, "POD_PRODUCT_NOT_FOUND", "商品不存在")
+        if product is None or product.owner_id != principal.user_id:
+            raise ApiError(404, "POD_PRODUCT_NOT_FOUND", "商品不存在")
         master = await session.get(PodPrintMaster, product.print_master_id)
         project = await _project_or_404(session, product.project_id, principal.user_id)
         blank = await _blank_or_404(session, project.blank_id, principal.user_id)
-        references = list((await session.scalars(select(PodBlankReference).where(PodBlankReference.blank_id == blank.id).order_by(PodBlankReference.sort_order, PodBlankReference.id))).all())
-        if not references: raise ApiError(422, "POD_BLANK_REFERENCE_REQUIRED", "请先添加真实胚件参考图")
+        references = list(
+            (
+                await session.scalars(
+                    select(PodBlankReference)
+                    .where(PodBlankReference.blank_id == blank.id)
+                    .order_by(PodBlankReference.sort_order, PodBlankReference.id)
+                )
+            ).all()
+        )
+        if not references:
+            raise ApiError(422, "POD_BLANK_REFERENCE_REQUIRED", "请先添加真实胚件参考图")
         if master is None or master.status != "active":
             raise ApiError(409, "POD_PRINT_MASTER_NOT_ACTIVE", "Print Master 尚未锁定或已失效")
         if master.asset_id in {reference.asset_id for reference in references}:
@@ -1045,19 +1490,47 @@ async def generate_primary_visual(product_id: uuid.UUID, payload: ProductVisualG
                 "Print Master 不能使用胚件真实参考图素材",
             )
         asset_ids = [item.asset_id for item in references] + [master.asset_id]
-        prompt = product_visual_prompt(blank_name=blank.name, visual_style=blank.product_visual_style, scene=payload.scene, composition=payload.composition)
-    parameters = {"blank_id": str(blank.id), "project_id": str(project.id), "product_id": str(product.id), "print_master_id": str(master.id), "print_master_asset_id": str(master.asset_id), "blank_reference_asset_ids": [str(item.asset_id) for item in references], "reference_asset_ids": [str(item) for item in asset_ids], "prompt": prompt, "size": payload.size, "quality": payload.quality, "image_count": 1}
-    job = await _submit_job(request=request, principal=principal, operation_code="pod.visual.generate", source_asset_id=references[0].asset_id, parameters=parameters, idempotency_key=idempotency_key)
+        prompt = product_visual_prompt(
+            blank_name=blank.name,
+            visual_style=blank.product_visual_style,
+            scene=payload.scene,
+            composition=payload.composition,
+        )
+    parameters = {
+        "blank_id": str(blank.id),
+        "project_id": str(project.id),
+        "product_id": str(product.id),
+        "print_master_id": str(master.id),
+        "print_master_asset_id": str(master.asset_id),
+        "blank_reference_asset_ids": [str(item.asset_id) for item in references],
+        "reference_asset_ids": [str(item) for item in asset_ids],
+        "prompt": prompt,
+        "size": payload.size,
+        "quality": payload.quality,
+        "image_count": 1,
+    }
+    job = await _submit_job(
+        request=request,
+        principal=principal,
+        operation_code="pod.visual.generate",
+        source_asset_id=references[0].asset_id,
+        parameters=parameters,
+        idempotency_key=idempotency_key,
+    )
     return {"job": job}
 
 
 @router.post("/reviews", status_code=status.HTTP_201_CREATED)
-async def create_review(payload: ReviewCreate, request: Request, principal: PodWriter) -> dict[str, Any]:
+async def create_review(
+    payload: ReviewCreate, request: Request, principal: PodWriter
+) -> dict[str, Any]:
     async with request.app.state.runtime_services.database.session_factory() as session:
         if payload.target_type == "product":
             product = await session.get(PodProduct, payload.target_id)
-            if product is None or product.owner_id != principal.user_id: raise ApiError(404, "POD_PRODUCT_NOT_FOUND", "商品不存在")
-            if payload.gate != "G3": raise ApiError(422, "POD_REVIEW_GATE_INVALID", "商品审核必须使用 G3")
+            if product is None or product.owner_id != principal.user_id:
+                raise ApiError(404, "POD_PRODUCT_NOT_FOUND", "商品不存在")
+            if payload.gate != "G3":
+                raise ApiError(422, "POD_REVIEW_GATE_INVALID", "商品审核必须使用 G3")
             if payload.decision == "approved":
                 await _require_product_main_reviewed(session, product)
                 copy = await session.scalar(
@@ -1080,6 +1553,28 @@ async def create_review(payload: ReviewCreate, request: Request, principal: PodW
             slot.status = "approved" if payload.decision == "approved" else "rejected"
         review = PodReview(id=uuid7(), owner_id=principal.user_id, **payload.model_dump())
         session.add(review)
-        _record_event(session, topic="pod.review.created", aggregate_id=review.id, owner_id=principal.user_id, request_id=_request_id(request), details={"target_type": payload.target_type, "gate": payload.gate, "decision": payload.decision})
-        await session.commit(); await session.refresh(review)
-    return {"review": {"id": str(review.id), "target_type": review.target_type, "target_id": str(review.target_id), "gate": review.gate, "decision": review.decision, "note": review.note, "created_at": review.created_at}}
+        _record_event(
+            session,
+            topic="pod.review.created",
+            aggregate_id=review.id,
+            owner_id=principal.user_id,
+            request_id=_request_id(request),
+            details={
+                "target_type": payload.target_type,
+                "gate": payload.gate,
+                "decision": payload.decision,
+            },
+        )
+        await session.commit()
+        await session.refresh(review)
+    return {
+        "review": {
+            "id": str(review.id),
+            "target_type": review.target_type,
+            "target_id": str(review.target_id),
+            "gate": review.gate,
+            "decision": review.decision,
+            "note": review.note,
+            "created_at": review.created_at,
+        }
+    }

@@ -1155,9 +1155,15 @@ class PodBlank(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     category: Mapped[str] = mapped_column(String(100), nullable=False)
     material: Mapped[str] = mapped_column(String(100), nullable=False)
-    confirmed_attributes: Mapped[dict[str, Any]] = mapped_column(JSON_VALUE, default=dict, nullable=False)
-    suggested_attributes: Mapped[dict[str, Any]] = mapped_column(JSON_VALUE, default=dict, nullable=False)
-    product_visual_style: Mapped[dict[str, Any]] = mapped_column(JSON_VALUE, default=dict, nullable=False)
+    confirmed_attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSON_VALUE, default=dict, nullable=False
+    )
+    suggested_attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSON_VALUE, default=dict, nullable=False
+    )
+    product_visual_style: Mapped[dict[str, Any]] = mapped_column(
+        JSON_VALUE, default=dict, nullable=False
+    )
     status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -1253,7 +1259,9 @@ class PodProductIdea(Base):
     core_elements: Mapped[list[str]] = mapped_column(JSON_VALUE, default=list, nullable=False)
     avoid_elements: Mapped[list[str]] = mapped_column(JSON_VALUE, default=list, nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
-    infringement_risk: Mapped[dict[str, Any]] = mapped_column(JSON_VALUE, default=dict, nullable=False)
+    infringement_risk: Mapped[dict[str, Any]] = mapped_column(
+        JSON_VALUE, default=dict, nullable=False
+    )
     status: Mapped[str] = mapped_column(String(16), default="proposed", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -1270,7 +1278,9 @@ class PodDesignConcept(Base):
             "status IN ('proposed', 'adopted', 'archived')",
             name="ck_pod_design_concepts_status",
         ),
-        Index("ix_pod_design_concepts_idea_status", "product_idea_id", "status", "created_at", "id"),
+        Index(
+            "ix_pod_design_concepts_idea_status", "product_idea_id", "status", "created_at", "id"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -1324,7 +1334,9 @@ class PodPrintCandidate(Base):
     generation_job_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("image_jobs.id", ondelete="RESTRICT"), nullable=False
     )
-    prompt_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON_VALUE, default=dict, nullable=False)
+    prompt_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON_VALUE, default=dict, nullable=False
+    )
     status: Mapped[str] = mapped_column(String(16), default="generated", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -1334,9 +1346,7 @@ class PodPrintCandidate(Base):
 class PodPrintMaster(Base):
     __tablename__ = "pod_print_masters"
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('active', 'superseded')", name="ck_pod_print_masters_status"
-        ),
+        CheckConstraint("status IN ('active', 'superseded')", name="ck_pod_print_masters_status"),
         UniqueConstraint("print_candidate_id", name="uq_pod_print_masters_candidate"),
         Index(
             "uq_pod_print_masters_project_active",
@@ -1410,9 +1420,7 @@ class PodProduct(Base):
 class PodProductCopy(Base):
     __tablename__ = "pod_product_copies"
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('active', 'archived')", name="ck_pod_product_copies_status"
-        ),
+        CheckConstraint("status IN ('active', 'archived')", name="ck_pod_product_copies_status"),
         UniqueConstraint("product_id", "version", name="uq_pod_product_copies_product_version"),
         Index(
             "uq_pod_product_copies_product_active",
@@ -1453,9 +1461,7 @@ class PodProductCopy(Base):
 class PodImageSet(Base):
     __tablename__ = "pod_image_sets"
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('active', 'archived')", name="ck_pod_image_sets_status"
-        ),
+        CheckConstraint("status IN ('active', 'archived')", name="ck_pod_image_sets_status"),
         UniqueConstraint("product_id", "version", name="uq_pod_image_sets_product_version"),
         Index(
             "uq_pod_image_sets_product_active",
@@ -1514,9 +1520,7 @@ class PodImageSlot(Base):
     composition_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     style_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
-    asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("assets.id", ondelete="RESTRICT")
-    )
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("assets.id", ondelete="RESTRICT"))
     generation_job_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("image_jobs.id", ondelete="RESTRICT")
     )
@@ -1535,12 +1539,8 @@ class PodImageSlot(Base):
 class PodReview(Base):
     __tablename__ = "pod_reviews"
     __table_args__ = (
-        CheckConstraint(
-            "gate IN ('G0', 'G1', 'G2', 'G3')", name="ck_pod_reviews_gate"
-        ),
-        CheckConstraint(
-            "decision IN ('approved', 'rejected')", name="ck_pod_reviews_decision"
-        ),
+        CheckConstraint("gate IN ('G0', 'G1', 'G2', 'G3')", name="ck_pod_reviews_gate"),
+        CheckConstraint("decision IN ('approved', 'rejected')", name="ck_pod_reviews_decision"),
         Index("ix_pod_reviews_target", "target_type", "target_id", "created_at", "id"),
     )
 

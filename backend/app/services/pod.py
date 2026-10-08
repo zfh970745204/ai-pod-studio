@@ -102,8 +102,12 @@ class PodJobExecutor:
         project_id = self._uuid(claim.parameters, "project_id")
         count = int(claim.parameters.get("count", 20))
         async with self.database.session_factory() as session:
-            project = await self._owned(session, PodDevelopmentProject, project_id, claim.user_id, "开发项目不存在")
-            blank = await self._owned(session, PodBlank, project.blank_id, claim.user_id, "胚件不存在")
+            project = await self._owned(
+                session, PodDevelopmentProject, project_id, claim.user_id, "开发项目不存在"
+            )
+            blank = await self._owned(
+                session, PodBlank, project.blank_id, claim.user_id, "胚件不存在"
+            )
             from app.domain.pod import product_ideas_instruction
 
             result = await self._chat(
@@ -121,10 +125,16 @@ class PodJobExecutor:
                 raise PermanentJobError("POD_AI_COUNT_MISMATCH", "AI 返回的创意数量不符合请求")
             batch_id = uuid7()
             for item in batch.items:
-                session.add(PodProductIdea(
-                    id=uuid7(), project_id=project.id, generation_job_id=claim.job_id,
-                    generation_batch_id=batch_id, status="proposed", **item.model_dump()
-                ))
+                session.add(
+                    PodProductIdea(
+                        id=uuid7(),
+                        project_id=project.id,
+                        generation_job_id=claim.job_id,
+                        generation_batch_id=batch_id,
+                        status="proposed",
+                        **item.model_dump(),
+                    )
+                )
             project.status, project.current_stage = "active", "ideas"
             await session.commit()
         return result.provider_request_id
@@ -134,30 +144,43 @@ class PodJobExecutor:
         count = int(claim.parameters.get("count", 4))
         async with self.database.session_factory() as session:
             idea = await self._idea_owned(session, idea_id, claim.user_id)
-            result = await self._chat(claim, design_concepts_instruction(idea=self._idea_dict(idea), count=count))
+            result = await self._chat(
+                claim, design_concepts_instruction(idea=self._idea_dict(idea), count=count)
+            )
             batch = DesignConceptBatch.model_validate(parse_json(result.content))
             if len(batch.items) != count:
                 raise PermanentJobError("POD_AI_COUNT_MISMATCH", "AI 返回的设计数量不符合请求")
             for item in batch.items:
-                session.add(PodDesignConcept(
-                    id=uuid7(), product_idea_id=idea.id, generation_job_id=claim.job_id,
-                    status="proposed", **item.model_dump()
-                ))
+                session.add(
+                    PodDesignConcept(
+                        id=uuid7(),
+                        product_idea_id=idea.id,
+                        generation_job_id=claim.job_id,
+                        status="proposed",
+                        **item.model_dump(),
+                    )
+                )
             await session.commit()
         return result.provider_request_id
 
     async def _generate_image_strategy(self, claim: ClaimedJob) -> str | None:
         product_id = self._uuid(claim.parameters, "product_id")
         async with self.database.session_factory() as session:
-            product = await self._owned(session, PodProduct, product_id, claim.user_id, "商品不存在")
+            product = await self._owned(
+                session, PodProduct, product_id, claim.user_id, "商品不存在"
+            )
             project = await self._owned(
                 session, PodDevelopmentProject, product.project_id, claim.user_id, "开发项目不存在"
             )
-            blank = await self._owned(session, PodBlank, project.blank_id, claim.user_id, "胚件不存在")
+            blank = await self._owned(
+                session, PodBlank, project.blank_id, claim.user_id, "胚件不存在"
+            )
             idea = await self._idea_owned(session, product.product_idea_id, claim.user_id)
             master = await session.get(PodPrintMaster, product.print_master_id)
             if master is None or master.status != "active":
-                raise PermanentJobError("POD_PRINT_MASTER_NOT_ACTIVE", "Print Master 尚未锁定或已失效")
+                raise PermanentJobError(
+                    "POD_PRINT_MASTER_NOT_ACTIVE", "Print Master 尚未锁定或已失效"
+                )
             result = await self._chat(
                 claim,
                 product_image_strategy_instruction(
@@ -191,7 +214,10 @@ class PodJobExecutor:
                 product_id=product.id,
                 generation_job_id=claim.job_id,
                 version=(latest_version or 0) + 1,
-                strategy_snapshot={"rationale": strategy.rationale, "slots": [item.model_dump() for item in strategy.slots]},
+                strategy_snapshot={
+                    "rationale": strategy.rationale,
+                    "slots": [item.model_dump() for item in strategy.slots],
+                },
                 status="active",
             )
             session.add(image_set)
@@ -225,20 +251,32 @@ class PodJobExecutor:
     async def _generate_product_copy(self, claim: ClaimedJob) -> str | None:
         product_id = self._uuid(claim.parameters, "product_id")
         async with self.database.session_factory() as session:
-            product = await self._owned(session, PodProduct, product_id, claim.user_id, "商品不存在")
-            if product.primary_visual_asset_id is None or product.status not in {"visual_ready", "approved", "review_pending"}:
-                raise PermanentJobError("POD_PRODUCT_MAIN_VISUAL_REQUIRED", "请先完成商品主图生成和审核")
+            product = await self._owned(
+                session, PodProduct, product_id, claim.user_id, "商品不存在"
+            )
+            if product.primary_visual_asset_id is None or product.status not in {
+                "visual_ready",
+                "approved",
+                "review_pending",
+            }:
+                raise PermanentJobError(
+                    "POD_PRODUCT_MAIN_VISUAL_REQUIRED", "请先完成商品主图生成和审核"
+                )
             project = await self._owned(
                 session, PodDevelopmentProject, product.project_id, claim.user_id, "开发项目不存在"
             )
-            blank = await self._owned(session, PodBlank, project.blank_id, claim.user_id, "胚件不存在")
+            blank = await self._owned(
+                session, PodBlank, project.blank_id, claim.user_id, "胚件不存在"
+            )
             idea = await self._idea_owned(session, product.product_idea_id, claim.user_id)
             concept = await session.get(PodDesignConcept, product.design_concept_id)
             master = await session.get(PodPrintMaster, product.print_master_id)
             if concept is None or concept.status != "adopted":
                 raise PermanentJobError("POD_DESIGN_NOT_ADOPTED", "当前商品设计方案不可用")
             if master is None or master.status != "active":
-                raise PermanentJobError("POD_PRINT_MASTER_NOT_ACTIVE", "Print Master 尚未锁定或已失效")
+                raise PermanentJobError(
+                    "POD_PRINT_MASTER_NOT_ACTIVE", "Print Master 尚未锁定或已失效"
+                )
             active_set = await session.scalar(
                 select(PodImageSet).where(
                     PodImageSet.product_id == product.id, PodImageSet.status == "active"
@@ -252,7 +290,9 @@ class PodJobExecutor:
                     )
                 )
                 if main_slot is None or main_slot.status != "approved":
-                    raise PermanentJobError("POD_PRODUCT_MAIN_REVIEW_REQUIRED", "请先完成当前商品主图的 G2 审核")
+                    raise PermanentJobError(
+                        "POD_PRODUCT_MAIN_REVIEW_REQUIRED", "请先完成当前商品主图的 G2 审核"
+                    )
             instruction = product_copy_instruction(
                 category=blank.category,
                 material=blank.material,
@@ -261,10 +301,20 @@ class PodJobExecutor:
                 design={
                     key: getattr(concept, key)
                     for key in (
-                        "design_name", "visual_style", "composition", "layout", "main_subject",
-                        "secondary_elements", "color_palette", "typography_direction",
-                        "pattern_structure", "print_method", "recommended_print_area",
-                        "texture_direction", "background_direction", "negative_elements",
+                        "design_name",
+                        "visual_style",
+                        "composition",
+                        "layout",
+                        "main_subject",
+                        "secondary_elements",
+                        "color_palette",
+                        "typography_direction",
+                        "pattern_structure",
+                        "print_method",
+                        "recommended_print_area",
+                        "texture_direction",
+                        "background_direction",
+                        "negative_elements",
                     )
                 },
             )
@@ -274,7 +324,10 @@ class PodJobExecutor:
                 (
                     await session.scalars(
                         select(PodProductCopy)
-                        .where(PodProductCopy.product_id == product.id, PodProductCopy.status == "active")
+                        .where(
+                            PodProductCopy.product_id == product.id,
+                            PodProductCopy.status == "active",
+                        )
                         .with_for_update()
                     )
                 ).all()
@@ -339,13 +392,20 @@ class PodJobExecutor:
         for asset in refs[:3]:
             raw = await self.storage.get_object(asset.object_key)
             encoded = base64.b64encode(raw).decode("ascii")
-            content.append({"type": "image_url", "image_url": {"url": f"data:{asset.mime_type};base64,{encoded}"}})
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{asset.mime_type};base64,{encoded}"},
+                }
+            )
         return content
 
     async def _references(self, session, blank_id: uuid.UUID) -> list[Asset]:
         rows = await session.execute(
-            select(Asset).join(PodBlankReference, PodBlankReference.asset_id == Asset.id)
-            .where(PodBlankReference.blank_id == blank_id).order_by(PodBlankReference.sort_order, PodBlankReference.id)
+            select(Asset)
+            .join(PodBlankReference, PodBlankReference.asset_id == Asset.id)
+            .where(PodBlankReference.blank_id == blank_id)
+            .order_by(PodBlankReference.sort_order, PodBlankReference.id)
         )
         assets = list(rows.scalars())
         if not assets:
@@ -362,9 +422,9 @@ class PodJobExecutor:
     @staticmethod
     async def _idea_owned(session, idea_id, owner_id) -> PodProductIdea:
         row = await session.execute(
-            select(PodProductIdea).join(PodDevelopmentProject).where(
-                PodProductIdea.id == idea_id, PodDevelopmentProject.owner_id == owner_id
-            )
+            select(PodProductIdea)
+            .join(PodDevelopmentProject)
+            .where(PodProductIdea.id == idea_id, PodDevelopmentProject.owner_id == owner_id)
         )
         idea = row.scalar_one_or_none()
         if idea is None:
@@ -380,11 +440,24 @@ class PodJobExecutor:
 
     @staticmethod
     def _idea_dict(idea: PodProductIdea) -> dict[str, Any]:
-        return {key: getattr(idea, key) for key in (
-            "idea_name", "target_audience", "use_case", "emotional_angle", "design_theme",
-            "visual_direction", "recommended_style", "composition_direction", "color_direction",
-            "core_elements", "avoid_elements", "rationale", "infringement_risk",
-        )}
+        return {
+            key: getattr(idea, key)
+            for key in (
+                "idea_name",
+                "target_audience",
+                "use_case",
+                "emotional_angle",
+                "design_theme",
+                "visual_direction",
+                "recommended_style",
+                "composition_direction",
+                "color_direction",
+                "core_elements",
+                "avoid_elements",
+                "rationale",
+                "infringement_risk",
+            )
+        }
 
 
 async def attach_image_outputs(session, claim: ClaimedJob, asset_ids: list[uuid.UUID]) -> None:
@@ -401,16 +474,20 @@ async def attach_image_outputs(session, claim: ClaimedJob, asset_ids: list[uuid.
             raise PermanentJobError("INVALID_OPERATION_PARAMETERS", "印花任务缺少设计方案快照")
         parsed = DesignConceptDraft.model_validate(design)
         for index, asset_id in enumerate(asset_ids):
-            session.add(PodPrintCandidate(
-                id=uuid7(), design_concept_id=concept.id, asset_id=asset_id,
-                generation_job_id=claim.job_id,
-                prompt_snapshot={
-                    "design_concept": parsed.model_dump(),
-                    "model_prompt": print_prompt(parsed, index),
-                    "variation_index": index + 1,
-                },
-                status="generated",
-            ))
+            session.add(
+                PodPrintCandidate(
+                    id=uuid7(),
+                    design_concept_id=concept.id,
+                    asset_id=asset_id,
+                    generation_job_id=claim.job_id,
+                    prompt_snapshot={
+                        "design_concept": parsed.model_dump(),
+                        "model_prompt": print_prompt(parsed, index),
+                        "variation_index": index + 1,
+                    },
+                    status="generated",
+                )
+            )
     elif claim.operation_code in {"pod.visual.generate", "pod.visual.generic"}:
         product_id = PodJobExecutor._uuid(claim.parameters, "product_id")
         product = await session.get(PodProduct, product_id)

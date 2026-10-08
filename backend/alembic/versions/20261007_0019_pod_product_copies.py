@@ -65,9 +65,17 @@ def upgrade() -> None:
             code="pod.copy.generate",
         )
     )
-    op.execute(sa.text("INSERT INTO schema_migrations (version) VALUES (:version)").bindparams(version=revision))
+    op.execute(
+        sa.text("INSERT INTO schema_migrations (version) VALUES (:version)").bindparams(
+            version=revision
+        )
+    )
 
 
 def downgrade() -> None:
     op.execute("UPDATE operation_catalog SET enabled = false WHERE code = 'pod.copy.generate'")
-    op.execute(sa.text("DELETE FROM schema_migrations WHERE version = :version").bindparams(version=revision))
+    op.execute(
+        sa.text("DELETE FROM schema_migrations WHERE version = :version").bindparams(
+            version=revision
+        )
+    )

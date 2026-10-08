@@ -134,7 +134,8 @@ async def execute_image_job(ctx: dict[str, Any], job_id: str) -> dict[str, Any]:
         try:
             executor = (
                 ctx.get("pod_job_executor")
-                if claim.operation_code in {
+                if claim.operation_code
+                in {
                     "pod.blank.analyze",
                     "pod.idea.generate",
                     "pod.design.generate",

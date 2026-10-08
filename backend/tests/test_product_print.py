@@ -1,0 +1,340 @@
+from io import BytesIO
+
+import numpy as np
+import pytest
+from PIL import Image, ImageDraw
+from sqlalchemy import func, select
+from test_assets import asset_context as asset_fixture
+from test_assets import client_for, login, seed_user, upload
+
+from app.image_ops import ImageInputError
+from app.print_extraction import finish_print, product_background
+from app.repositories.models import ImageJob, PointAccount
+
+asset_context = asset_fixture
+
+
+def png(image):
+    output = BytesIO()
+    image.save(output, "PNG")
+    return output.getvalue()
+
+
+def garment(color):
+    image = Image.new("RGB", (240, 240), "white")
+    draw = ImageDraw.Draw(image)
+    draw.polygon(
+        [(65, 35), (175, 35), (210, 80), (185, 105), (180, 215), (60, 215), (55, 105), (30, 80)],
+        fill=color,
+    )
+    draw.rectangle((100, 90, 140, 155), fill="#D13A40")
+    return png(image)
+
+
+@pytest.mark.parametrize("color", ["#000000", "#FFFFFF", "#245EAA"])
+def test_product_color_is_not_the_studio_surround(color):
+    assert product_background(garment(color))["color"] == color
+
+
+def test_manual_sample_preserves_the_selected_color():
+    raw = garment("#152331")
+    assert product_background(raw, (0.3, 0.7))["color"] == "#152331"
+    assert product_background(raw, (0.02, 0.02))["color"] == "#FFFFFF"
+    with pytest.raises(ImageInputError):
+        product_background(png(Image.new("RGBA", (80, 80))), (0.5, 0.5))
+
+
+def test_large_colored_print_on_white_shirt_is_not_the_product_base():
+    with Image.open(BytesIO(garment("#FFFFFF"))) as image:
+        ImageDraw.Draw(image).rectangle((85, 70, 155, 190), fill="#D13A40")
+        assert product_background(png(image))["color"] == "#FFFFFF"
+
+
+@pytest.mark.parametrize(
+    "color,ink", [("#000000", "white"), ("#FFFFFF", "black"), ("#245EAA", "white")]
+)
+def test_exterior_and_multiple_enclosed_holes_are_cleared_without_losing_ink_islands(color, ink):
+    original = Image.new("RGB", (128, 128), color)
+    draw = ImageDraw.Draw(original)
+    draw.rectangle((24, 24, 104, 104), fill=ink)
+    draw.ellipse((48, 48, 68, 68), fill=color)
+    draw.rectangle((76, 42, 94, 76), fill=color)
+    draw.rectangle((82, 50, 88, 66), fill=ink)
+    draw.point((36, 36), fill=color)
+    draw.line((12, 15, 15, 95), fill=ink, width=1)
+    result, metadata = finish_print(png(original), mode="transparent", color=color)
+    with Image.open(BytesIO(result)) as image:
+        assert image.getpixel((1, 1))[3] == 0
+        assert image.getpixel((58, 58))[3] == 0
+        assert image.getpixel((78, 58))[3] == 0
+        assert image.getpixel((36, 36))[3] == 0
+        assert image.getpixel((85, 58))[3] == 255
+        assert image.getpixel((14, 70))[3] == 255
+        composite = Image.alpha_composite(Image.new("RGBA", image.size, color), image).convert(
+            "RGB"
+        )
+        np.testing.assert_array_equal(np.array(composite), np.array(original))
+    assert metadata["method"] == "product-color-regions"
+    assert metadata["background_scope"] == "exterior-and-enclosed"
+    assert metadata["enclosed_background_regions"] == 3
+
+
+@pytest.mark.parametrize(
+    "color,ink,detail",
+    [
+        ("#000000", "white", "#0A0A0A"),
+        ("#FFFFFF", "black", "#F5F5F5"),
+        ("#245EAA", "white", "#2E68B4"),
+    ],
+)
+def test_enclosed_near_color_ink_without_a_background_core_is_preserved(color, ink, detail):
+    original = Image.new("RGB", (128, 128), color)
+    draw = ImageDraw.Draw(original)
+    draw.rectangle((24, 24, 104, 104), fill=ink)
+    draw.ellipse((48, 48, 68, 68), fill=detail)
+    result, metadata = finish_print(png(original), mode="transparent", color=color)
+    with Image.open(BytesIO(result)) as image:
+        assert image.getpixel((58, 58)) == (*original.getpixel((58, 58)), 255)
+        assert image.getpixel((1, 1))[3] == 0
+    assert metadata["enclosed_background_regions"] == 0
+
+
+@pytest.mark.parametrize("color,ink", [("#000000", "white"), ("#FFFFFF", "black")])
+def test_internal_hole_soft_edges_are_cleaned_like_the_exterior(color, ink):
+    original = Image.new("RGB", (128, 128), color)
+    draw = ImageDraw.Draw(original)
+    draw.rectangle((20, 20, 108, 108), fill=ink)
+    background = 0 if color == "#000000" else 255
+    for inset, fraction in [(42, 0.075), (43, 0.055), (44, 0.04), (45, 0.025), (46, 0)]:
+        value = round(background * (1 - fraction) + (255 - background) * fraction)
+        draw.rectangle((inset, inset, 128 - inset, 128 - inset), fill=(value,) * 3)
+    result, _ = finish_print(png(original), mode="transparent", color=color)
+    with Image.open(BytesIO(result)) as image:
+        assert image.getpixel((64, 64))[3] == 0
+        assert 0 < image.getpixel((43, 64))[3] < 255
+        assert image.getpixel((40, 64))[3] == 255
+        composite = Image.alpha_composite(Image.new("RGBA", image.size, color), image)
+        assert (
+            np.max(np.abs(np.array(composite.convert("RGB")).astype(int) - np.array(original))) <= 1
+        )
+
+
+@pytest.mark.parametrize("color", ["#000000", "#FFFFFF", "#245EAA"])
+def test_opaque_output_retains_background_inside_holes(color):
+    original = Image.new("RGB", (128, 128), color)
+    draw = ImageDraw.Draw(original)
+    draw.rectangle((24, 24, 104, 104), fill="#CC5035")
+    draw.ellipse((48, 48, 68, 68), fill=color)
+    result, metadata = finish_print(png(original), mode="opaque", color=color)
+    with Image.open(BytesIO(result)) as image:
+        assert image.mode == "RGB"
+        np.testing.assert_array_equal(np.array(image), np.array(original))
+    assert metadata["transparent_background"] is False
+
+
+@pytest.mark.parametrize("background", [0, 255])
+def test_soft_matte_does_not_double_darkening_or_whiten_edges_on_product_color(background):
+    color = "#000000" if background == 0 else "#FFFFFF"
+    pixels = np.full((128, 128, 3), background, dtype=np.uint8)
+    ink = 255 - background
+    for inset, fraction in [(25, 0.025), (26, 0.04), (27, 0.055), (28, 0.075), (29, 0.2), (30, 1)]:
+        pixels[inset:-inset, inset:-inset] = round(background * (1 - fraction) + ink * fraction)
+    result, _ = finish_print(png(Image.fromarray(pixels)), mode="transparent", color=color)
+    with Image.open(BytesIO(result)) as image:
+        alpha = np.array(image)[:, :, 3]
+        assert np.any((alpha > 0) & (alpha < 255))
+        composite = Image.alpha_composite(Image.new("RGBA", image.size, color), image).convert(
+            "RGB"
+        )
+        assert np.max(np.abs(np.array(composite).astype(int) - pixels)) <= 1
+
+
+def test_native_alpha_is_preserved_or_composited_to_opaque_black():
+    image = Image.new("RGBA", (128, 128))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((30, 30, 90, 90), fill=(255, 255, 255, 255))
+    draw.ellipse((40, 40, 54, 54), fill=(0, 0, 0, 0))
+    # Native alpha distinguishes black ink from a hole even on a black product.
+    draw.ellipse((62, 40, 76, 54), fill=(0, 0, 0, 255))
+    draw.line((29, 30, 29, 90), fill=(20, 180, 40, 110))
+    raw = png(image)
+    transparent, _ = finish_print(raw, mode="transparent", color="#000000")
+    opaque, _ = finish_print(raw, mode="opaque", color="#000000")
+    with Image.open(BytesIO(transparent)) as result:
+        np.testing.assert_array_equal(np.array(image), np.array(result))
+    with Image.open(BytesIO(opaque)) as result:
+        assert result.mode == "RGB" and result.getpixel((0, 0)) == (0, 0, 0)
+        np.testing.assert_array_equal(
+            np.array(result),
+            np.array(
+                Image.alpha_composite(Image.new("RGBA", image.size, "black"), image).convert("RGB")
+            ),
+        )
+
+
+@pytest.mark.parametrize("mode", ["transparent", "opaque"])
+def test_blank_wrong_color_and_unflattened_outputs_are_not_published(mode):
+    checkerboard = Image.new("RGB", (128, 128), "white")
+    draw = ImageDraw.Draw(checkerboard)
+    for x in range(0, 128, 16):
+        draw.rectangle((x, 0, x + 7, 127), fill="#666666")
+    for image in (
+        Image.new("RGBA", (128, 128)),
+        Image.new("RGB", (128, 128), "black"),
+        checkerboard,
+        Image.new("RGB", (128, 128), "#00FF00"),
+    ):
+        with pytest.raises(ImageInputError):
+            finish_print(png(image), mode=mode, color="#000000")
+
+
+@pytest.mark.asyncio
+async def test_color_endpoint_is_owner_scoped_and_options_are_bound_to_the_quote(asset_context):
+    owner = await seed_user(asset_context, email="color-owner@example.test")
+    other = await seed_user(asset_context, email="color-other@example.test")
+    async with client_for(asset_context, "color-owner") as client:
+        await login(client, owner.email)
+        asset = (await upload(client, garment("#000000"))).json()["asset"]
+        url = f"/api/v1/assets/{asset['id']}/print-background"
+        assert (await client.get(url)).json()["color"] == "#000000"
+        assert (await client.get(url + "?x=0.02&y=0.02")).json()["color"] == "#FFFFFF"
+        assert (await client.get(url + "?x=0.5")).status_code == 422
+        assert (await client.get(url + "?x=2&y=0.5")).status_code == 422
+        for bad in ({"output_mode": "fake"}, {"background_color": "red"}, {"background_color": []}):
+            response = await client.post(
+                "/api/v1/jobs/quote",
+                json={
+                    "operation_code": "ai.extract_print",
+                    "source_asset_id": asset["id"],
+                    "parameters": bad,
+                },
+            )
+            assert response.status_code == 422
+        quotes = []
+        for mode in ("transparent", "opaque"):
+            parameters = {"quality": "high", "output_mode": mode, "background_color": "#000000"}
+            response = await client.post(
+                "/api/v1/jobs/quote",
+                json={
+                    "operation_code": "ai.extract_print",
+                    "source_asset_id": asset["id"],
+                    "parameters": parameters,
+                },
+            )
+            assert response.status_code == 201, response.text
+            quotes.append(response.json()["quote"])
+        assert quotes[0]["final_points"] == quotes[1]["final_points"]
+        for changed in (
+            {**parameters, "background_color": "#FFFFFF"},
+            {**parameters, "output_mode": "transparent"},
+        ):
+            response = await client.post(
+                "/api/v1/jobs",
+                headers={"Idempotency-Key": "color-change"},
+                json={"quote_id": quotes[1]["id"], "parameters": changed},
+            )
+            assert response.status_code == 409 and response.json()["code"] == "JOB_QUOTE_MISMATCH"
+    async with client_for(asset_context, "color-other") as client:
+        assert (await client.get(url)).status_code == 401
+        await login(client, other.email)
+        assert (await client.get(url)).status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["transparent", "opaque"])
+async def test_print_quotes_accept_output_sizes_without_a_background_color(asset_context, mode):
+    owner = await seed_user(asset_context, email="print-size-quote@example.test")
+    async with client_for(asset_context, "print-size-quote") as client:
+        await login(client, owner.email)
+        asset = (await upload(client, garment("#245EAA"))).json()["asset"]
+        prices = []
+        for size in (None, "2048x2048", "2048x3072", "3072x2048", "3072x3072"):
+            parameters = {"quality": "high", "output_mode": mode}
+            if size is not None:
+                parameters["output_size"] = size
+            response = await client.post(
+                "/api/v1/jobs/quote",
+                json={
+                    "operation_code": "ai.extract_print",
+                    "source_asset_id": asset["id"],
+                    "parameters": parameters,
+                },
+            )
+            assert response.status_code == 201, response.text
+            prices.append(response.json()["quote"]["final_points"])
+        assert len(set(prices)) == 1
+
+
+@pytest.mark.asyncio
+async def test_print_quotes_reject_unsupported_output_sizes_without_charging(asset_context):
+    owner = await seed_user(asset_context, email="print-size-invalid@example.test")
+    async with client_for(asset_context, "print-size-invalid") as client:
+        await login(client, owner.email)
+        asset = (await upload(client, garment("#000000"))).json()["asset"]
+        for size in ("1024x1024", "4096x4096", "2048x0", "auto", "2048X3072", "", 2048, [], {}):
+            response = await client.post(
+                "/api/v1/jobs/quote",
+                json={
+                    "operation_code": "ai.extract_print",
+                    "source_asset_id": asset["id"],
+                    "parameters": {"output_size": size},
+                },
+            )
+            assert response.status_code == 422, (size, response.text)
+            assert response.json()["code"] == "INVALID_OPERATION_PARAMETERS"
+    async with asset_context.database.session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(ImageJob)) == 0
+        assert (
+            await session.scalar(
+                select(PointAccount.balance).where(PointAccount.user_id == owner.id)
+            )
+            == 200
+        )
+
+
+@pytest.mark.asyncio
+async def test_print_size_and_inferred_background_are_bound_to_the_quote(asset_context):
+    owner = await seed_user(asset_context, email="print-size-tamper@example.test")
+    parameters = {"output_size": "2048x3072", "output_mode": "transparent", "quality": "high"}
+    async with client_for(asset_context, "print-size-tamper") as client:
+        await login(client, owner.email)
+        asset = (await upload(client, garment("#000000"))).json()["asset"]
+        response = await client.post(
+            "/api/v1/jobs/quote",
+            json={
+                "operation_code": "ai.extract_print",
+                "source_asset_id": asset["id"],
+                "parameters": parameters,
+            },
+        )
+        assert response.status_code == 201, response.text
+        quote = response.json()["quote"]
+        changes = [
+            {**parameters, "output_size": "3072x2048"},
+            {key: value for key, value in parameters.items() if key != "output_size"},
+            {**parameters, "output_size": None},
+            {**parameters, "background_color": "#FFFFFF"},
+            {**parameters, "output_mode": "opaque"},
+        ]
+        for index, changed in enumerate(changes):
+            response = await client.post(
+                "/api/v1/jobs",
+                headers={"Idempotency-Key": f"print-size-tamper-{index}"},
+                json={"quote_id": quote["id"], "parameters": changed},
+            )
+            assert response.status_code == 409, response.text
+            assert response.json()["code"] == "JOB_QUOTE_MISMATCH"
+        async with asset_context.database.session_factory() as session:
+            assert await session.scalar(select(func.count()).select_from(ImageJob)) == 0
+            assert (
+                await session.scalar(
+                    select(PointAccount.balance).where(PointAccount.user_id == owner.id)
+                )
+                == 200
+            )
+        response = await client.post(
+            "/api/v1/jobs",
+            headers={"Idempotency-Key": "print-size-unchanged"},
+            json={"quote_id": quote["id"], "parameters": parameters},
+        )
+        assert response.status_code == 201, response.text

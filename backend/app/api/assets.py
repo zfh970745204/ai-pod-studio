@@ -1,0 +1,1010 @@
+from __future__ import annotations
+
+import asyncio
+import re
+import tempfile
+import uuid
+import zipfile
+from datetime import UTC, date, datetime, timedelta
+from io import BytesIO
+from typing import Annotated, Any, Literal
+
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
+from PIL import Image, ImageChops
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import String, cast, func, select
+
+from app.api.dependencies import Principal, require_permission
+from app.api.errors import ApiError
+from app.domain.assets import ASSET_KINDS, ASSET_STATUSES
+from app.image_ops import ImageInputError
+from app.object_storage import ObjectStorageError
+from app.print_extraction import product_background
+from app.repositories.models import Asset, ObjectDeletionQueue
+from app.services.asset_crop import crop_asset
+from app.services.asset_files import AssetInputError, prepare_asset
+from app.services.assets import AssetService, asset_page_statement
+from app.services.configuration import runtime_config_value
+from app.services.memberships import EntitlementService
+from app.services.raster_project import validate_raster_project
+
+router = APIRouter(tags=["assets"])
+service = AssetService()
+entitlements = EntitlementService()
+
+AssetReader = Annotated[Principal, Depends(require_permission("assets.read_own"))]
+AssetWriter = Annotated[Principal, Depends(require_permission("assets.write_own"))]
+AssetDeleter = Annotated[Principal, Depends(require_permission("assets.delete_own"))]
+AdminAssetReader = Annotated[Principal, Depends(require_permission("assets.read"))]
+AdminAssetManager = Annotated[Principal, Depends(require_permission("assets.manage"))]
+
+
+class AssetBundleRequest(BaseModel):
+    asset_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
+
+
+@router.post("/api/v1/assets/download-bundle")
+async def download_asset_bundle(
+    payload: AssetBundleRequest, request: Request, principal: AssetReader
+):
+    async with request.app.state.runtime_services.database.session_factory() as session:
+        assets = [
+            await service.require_usable(session, asset_id, owner_id=principal.user_id)
+            for asset_id in dict.fromkeys(payload.asset_ids)
+        ]
+        if sum(asset.size_bytes for asset in assets) > 256 * 1024 * 1024:
+            raise ApiError(413, "BUNDLE_TOO_LARGE", "单次打包最多 256 MB，请分批下载")
+    archive = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)  # noqa: SIM115
+    try:
+        total = 0
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as bundle:
+            for index, asset in enumerate(assets, 1):
+                data = await _storage(request).get_object(asset.object_key)
+                total += len(data)
+                if total > 256 * 1024 * 1024:
+                    raise ApiError(413, "BUNDLE_TOO_LARGE", "单次打包最多 256 MB")
+                name = re.sub(
+                    r'[\\/:*?"<>|\x00-\x1f]',
+                    "_",
+                    asset.original_filename or f"image.{asset.extension}",
+                ).strip(". ")[:160]
+                bundle.writestr(f"{index:03d}-{name}", data)
+        archive.seek(0)
+    except ObjectStorageError as exc:
+        archive.close()
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "图片读取失败，请稍后重试") from exc
+    except BaseException:
+        archive.close()
+        raise
+
+    def chunks():
+        try:
+            while data := archive.read(256 * 1024):
+                yield data
+        finally:
+            archive.close()
+
+    return StreamingResponse(
+        chunks(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="images.zip"',
+            "Cache-Control": "private, no-store",
+        },
+    )
+
+
+class CropRequest(BaseModel):
+    x: int = Field(ge=0, strict=True)
+    y: int = Field(ge=0, strict=True)
+    width: int = Field(ge=1, strict=True)
+    height: int = Field(ge=1, strict=True)
+    shape: Literal["rectangle", "circle"] = "rectangle"
+
+
+class QuarantineRequest(BaseModel):
+    quarantined: bool = True
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def strip_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("必须填写隔离原因")
+        return normalized
+
+
+def asset_payload(asset: Asset) -> dict[str, Any]:
+    return {
+        "id": asset.id,
+        "owner_id": asset.owner_id,
+        "root_asset_id": asset.root_asset_id,
+        "parent_asset_id": asset.parent_asset_id,
+        "source_job_id": asset.source_job_id,
+        "kind": asset.kind,
+        "operation_code": asset.operation_code,
+        "storage_provider": asset.storage_provider,
+        "original_filename": asset.original_filename,
+        "mime_type": asset.mime_type,
+        "extension": asset.extension,
+        "size_bytes": asset.size_bytes,
+        "sha256": asset.sha256,
+        "width": asset.width,
+        "height": asset.height,
+        "has_alpha": asset.has_alpha,
+        "status": asset.status,
+        "metadata": asset.asset_metadata,
+        "retention_until": asset.retention_until,
+        "deleted_at": asset.deleted_at,
+        "created_at": asset.created_at,
+        "updated_at": asset.updated_at,
+    }
+
+
+def _storage(request: Request):
+    storage = getattr(request.app.state, "object_storage", None)
+    if storage is None:
+        storage = getattr(request.app.state.runtime_services, "object_storage", None)
+    if storage is None or not storage.bucket:
+        raise ApiError(503, "OBJECT_STORAGE_NOT_CONFIGURED", "R2 对象存储尚未配置")
+    return storage
+
+
+def _ip_hash(request: Request) -> str:
+    address = request.client.host if request.client else "unknown"
+    return request.app.state.auth_service.fingerprint(address)
+
+
+def _validate_filters(kind: str | None, status_filter: str | None) -> None:
+    if kind is not None and kind not in ASSET_KINDS:
+        raise ApiError(422, "INVALID_ASSET_KIND", "无效的素材类型")
+    if status_filter is not None and status_filter not in ASSET_STATUSES:
+        raise ApiError(422, "INVALID_ASSET_STATUS", "无效的素材状态")
+
+
+async def _asset_page(
+    session,
+    *,
+    owner_id: uuid.UUID | None,
+    kind: str | None,
+    root_id: uuid.UUID | None,
+    status_filter: str | None,
+    cursor: uuid.UUID | None,
+    limit: int,
+    order: Literal["asc", "desc"] = "desc",
+    created_day: date | None = None,
+    job_query: str | None = None,
+    root_query: str | None = None,
+    editable_only: bool = False,
+) -> tuple[list[Asset], str | None]:
+    _validate_filters(kind, status_filter)
+    anchor = None
+    if cursor is not None:
+        anchor = await session.get(Asset, cursor)
+        if anchor is None or (owner_id is not None and anchor.owner_id != owner_id):
+            raise ApiError(422, "INVALID_CURSOR", "分页游标无效")
+    statement = asset_page_statement(
+        owner_id=owner_id,
+        kind=kind,
+        root_id=root_id,
+        status=status_filter,
+        anchor=anchor,
+        order=order,
+    )
+    if editable_only:
+        statement = statement.where(
+            Asset.kind.in_({"original", "result"}),
+            Asset.mime_type.in_({"image/png", "image/jpeg", "image/webp"}),
+        )
+    if created_day is not None:
+        start = datetime.combine(created_day, datetime.min.time(), tzinfo=UTC)
+        statement = statement.where(
+            Asset.created_at >= start, Asset.created_at < start + timedelta(days=1)
+        )
+    for column, query in ((Asset.source_job_id, job_query), (Asset.root_asset_id, root_query)):
+        if query:
+            normalized = query.strip().lower().replace("-", "")
+            if not normalized or any(c not in "0123456789abcdef" for c in normalized):
+                raise ApiError(422, "INVALID_ASSET_FILTER", "任务和版本链筛选请输入完整或部分 ID")
+            statement = statement.where(
+                func.replace(cast(column, String), "-", "").contains(normalized)
+            )
+    rows = list((await session.scalars(statement.limit(limit + 1))).all())
+    items = rows[:limit]
+    return items, str(items[-1].id) if len(rows) > limit and items else None
+
+
+@router.post("/api/v1/assets/upload", status_code=status.HTTP_201_CREATED)
+async def upload_asset(
+    request: Request,
+    principal: AssetWriter,
+    image: Annotated[UploadFile, File()],
+    kind: Annotated[str, Form()] = "original",
+    parent_asset_id: Annotated[uuid.UUID | None, Form()] = None,
+) -> dict[str, Any]:
+    _validate_filters(kind, None)
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        entitlement = await entitlements.current_snapshot(
+            session,
+            principal.user_id,
+            request_id=getattr(request.state, "request_id", "asset-upload"),
+        )
+        await session.commit()
+    global_upload_mb = int(
+        await runtime_config_value(
+            request.app.state.runtime_services,
+            "general",
+            "max_upload_mb",
+            request.app.state.settings.max_upload_mb,
+        )
+    )
+    global_megapixels = int(
+        await runtime_config_value(
+            request.app.state.runtime_services,
+            "general",
+            "max_image_megapixels",
+            request.app.state.settings.max_image_megapixels,
+        )
+    )
+    effective_upload_mb = min(entitlement.max_upload_mb, global_upload_mb)
+    effective_megapixels = min(entitlement.max_image_megapixels, global_megapixels)
+    limit = effective_upload_mb * 1024 * 1024
+    raw = await image.read(limit + 1)
+    if len(raw) > limit:
+        raise ApiError(
+            413,
+            "ASSET_TOO_LARGE",
+            f"文件超过 {effective_upload_mb} MB 上传限制",
+        )
+    try:
+        prepared = await asyncio.to_thread(
+            prepare_asset,
+            raw,
+            kind=kind,
+            max_megapixels=effective_megapixels,
+        )
+        asset = await service.store(
+            database,
+            _storage(request),
+            owner_id=principal.user_id,
+            prepared=prepared,
+            kind=kind,
+            operation_code="upload",
+            retention_days=entitlement.retention_days,
+            original_filename=image.filename,
+            parent_asset_id=parent_asset_id,
+            metadata={
+                "membership_id": str(entitlement.membership_id),
+                "plan_code": entitlement.plan_code,
+            },
+            request_id=getattr(request.state, "request_id", "asset-upload"),
+        )
+    except AssetInputError as exc:
+        raise ApiError(422, "INVALID_ASSET_FILE", str(exc)) from exc
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+    return {"asset": asset_payload(asset)}
+
+
+@router.get("/api/v1/assets")
+async def list_assets(
+    request: Request,
+    principal: AssetReader,
+    cursor: uuid.UUID | None = None,
+    kind: str | None = None,
+    root_id: uuid.UUID | None = None,
+    created_day: date | None = None,
+    job_query: str | None = Query(default=None, max_length=36),
+    root_query: str | None = Query(default=None, max_length=36),
+    status_filter: str = Query(default="ready", alias="status"),
+    limit: int = Query(default=30, ge=1, le=100),
+    editable_only: bool = False,
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        items, next_cursor = await _asset_page(
+            session,
+            owner_id=principal.user_id,
+            kind=kind,
+            root_id=root_id,
+            status_filter=status_filter,
+            cursor=cursor,
+            limit=limit,
+            created_day=created_day,
+            job_query=job_query,
+            root_query=root_query,
+            editable_only=editable_only,
+        )
+    return {"items": [asset_payload(item) for item in items], "next_cursor": next_cursor}
+
+
+@router.get("/api/v1/assets/{asset_id}")
+async def get_asset(
+    asset_id: uuid.UUID, request: Request, principal: AssetReader
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        asset = await service.get_visible(
+            session, asset_id, owner_id=principal.user_id, include_deleted=True
+        )
+        if asset.status not in {"ready", "deleted"}:
+            raise ApiError(404, "ASSET_NOT_FOUND", "素材不存在")
+        service.log_access(
+            session,
+            asset_id=asset.id,
+            actor_user_id=principal.user_id,
+            action="preview",
+            ip_hash=_ip_hash(request),
+            request_id=getattr(request.state, "request_id", "asset-preview"),
+        )
+        await session.commit()
+    return {"asset": asset_payload(asset)}
+
+
+@router.get("/api/v1/assets/{asset_id}/thumbnail")
+async def get_thumbnail(asset_id: uuid.UUID, request: Request, principal: AssetReader):
+    storage = _storage(request)
+    async with request.app.state.runtime_services.database.session_factory() as session:
+        try:
+            key = await service.ensure_thumbnail(
+                session, storage, asset_id=asset_id, owner_id=principal.user_id
+            )
+            url = await storage.presign_get(key, expires_seconds=600)
+        except ObjectStorageError as exc:
+            raise ApiError(503, "THUMBNAIL_UNAVAILABLE", "缩略图暂不可用") from exc
+    return RedirectResponse(url, headers={"Cache-Control": "private, max-age=60"})
+
+
+@router.get("/api/v1/assets/{asset_id}/print-background")
+async def get_print_background(
+    asset_id: uuid.UUID,
+    request: Request,
+    principal: AssetReader,
+    x: float | None = Query(default=None, ge=0, le=1),
+    y: float | None = Query(default=None, ge=0, le=1),
+) -> dict[str, Any]:
+    if (x is None) != (y is None):
+        raise ApiError(422, "INVALID_SAMPLE_POINT", "取色坐标必须同时提供横向和纵向位置")
+    async with request.app.state.runtime_services.database.session_factory() as session:
+        asset = await service.require_usable(session, asset_id, owner_id=principal.user_id)
+        if asset.mime_type not in {"image/png", "image/jpeg", "image/webp"} or asset.kind in {
+            "mask",
+            "thumbnail",
+        }:
+            raise ApiError(422, "INVALID_COLOR_SOURCE", "请使用原图或图片结果识别产品底色")
+        key = asset.object_key
+    try:
+        raw = await _storage(request).get_object(key)
+        return await asyncio.to_thread(product_background, raw, (x, y) if x is not None else None)
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "原图暂时无法读取") from exc
+    except (ImageInputError, OSError) as exc:
+        raise ApiError(
+            422, "PRODUCT_COLOR_UNAVAILABLE", "无法识别此处的底色，请手动选色或换个位置取色。"
+        ) from exc
+
+
+async def _selection_source(session, asset_id: uuid.UUID, owner_id: uuid.UUID):
+    asset = await service.require_usable(session, asset_id, owner_id=owner_id)
+    if asset.kind not in {"original", "result"} or asset.mime_type not in {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+    }:
+        raise ApiError(422, "INVALID_SELECTION_SOURCE", "请使用原图或图片结果进行选区修边")
+    if not asset.width or not asset.height or asset.width * asset.height > 16_000_000:
+        raise ApiError(
+            422, "SELECTION_IMAGE_TOO_LARGE", "选区修边支持最高 1600 万像素，请先缩小图片"
+        )
+    if asset.asset_metadata.get("edit_source_ready"):
+        return (
+            asset,
+            service.edit_source_key(asset.object_key),
+            bool(asset.asset_metadata.get("edit_restore_limited", False)),
+        )
+    # Only a cutout's parent has matching geometry. A product photo is never a
+    # restoration source for an extracted print, even if the dimensions match.
+    if asset.operation_code == "cutout.smart" and asset.parent_asset_id:
+        try:
+            parent = await service.require_usable(session, asset.parent_asset_id, owner_id=owner_id)
+        except ApiError:
+            parent = None
+        if parent and (parent.width, parent.height) == (asset.width, asset.height):
+            return asset, parent.object_key, False
+    return asset, asset.object_key, bool(asset.has_alpha and asset.kind == "result")
+
+
+@router.get("/api/v1/assets/{asset_id}/selection")
+async def get_selection_context(
+    asset_id: uuid.UUID, request: Request, principal: AssetReader
+) -> dict[str, Any]:
+    async with request.app.state.runtime_services.database.session_factory() as session:
+        asset, source_key, limited = await _selection_source(session, asset_id, principal.user_id)
+    return {
+        "width": asset.width,
+        "height": asset.height,
+        "restore_limited": limited,
+        "source_url": f"/api/v1/assets/{asset_id}/selection/"
+        + ("result" if source_key == asset.object_key else "source"),
+        "result_url": f"/api/v1/assets/{asset_id}/selection/result",
+        "has_initial_selection": asset.operation_code
+        in {
+            "cutout.smart",
+            "cutout.refine",
+            "image.crop",
+            "image.edit",
+        }
+        or (asset.operation_code == "ai.extract_print" and bool(asset.has_alpha)),
+    }
+
+
+@router.get("/api/v1/assets/{asset_id}/selection/{layer}")
+async def get_selection_pixels(
+    asset_id: uuid.UUID,
+    layer: Literal["source", "result"],
+    request: Request,
+    principal: AssetReader,
+) -> Response:
+    async with request.app.state.runtime_services.database.session_factory() as session:
+        asset, source_key, _ = await _selection_source(session, asset_id, principal.user_id)
+        key = source_key if layer == "source" else asset.object_key
+    try:
+        raw = await _storage(request).get_object(key)
+        # Stored PNGs are canonical already. Re-encoding multi-megapixel images
+        # on every editor open wastes seconds before the browser can decode them.
+        if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            prepared = await asyncio.to_thread(
+                prepare_asset, raw, kind="original", max_megapixels=16
+            )
+            raw = prepared.data  # Orient legacy JPEG/WebP sources once per request.
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "修边图片暂时无法读取，请重试") from exc
+    except AssetInputError as exc:
+        raise ApiError(422, "INVALID_SELECTION_SOURCE", str(exc)) from exc
+    return Response(raw, media_type="image/png", headers={"Cache-Control": "private, no-store"})
+
+
+def _validate_selection_result(raw: bytes, width: int, height: int, max_megapixels: int):
+    prepared = prepare_asset(raw, kind="mask", max_megapixels=max_megapixels)
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n") or (prepared.width, prepared.height) != (
+        width,
+        height,
+    ):
+        raise AssetInputError("请保存与原图尺寸一致的透明通道 PNG，不能缩放或裁切")
+    with Image.open(BytesIO(prepared.data)) as image:
+        if image.getchannel("A").getbbox() is None:
+            raise AssetInputError("不能保存完全透明的图片，请取消部分选区以保留图案")
+    return prepared
+
+
+def _raster_restore_layer(original: bytes, edited: bytes):
+    """Keep new paint, while retaining pre-erase coverage for later refinement."""
+    with Image.open(BytesIO(original)) as opened, Image.open(BytesIO(edited)) as changed:
+        before, after = opened.convert("RGBA"), changed.convert("RGBA")
+        alpha = after.getchannel("A")
+        # Visible edited RGB is authoritative, including paint in formerly
+        # transparent areas. Removed pixels recover the previous version's RGB.
+        restore = Image.composite(after, before, alpha.point(lambda value: 255 if value else 0))
+        restore.putalpha(ImageChops.lighter(before.getchannel("A"), alpha))
+        raw = BytesIO()
+        restore.save(raw, "PNG")
+    return prepare_asset(raw.getvalue(), kind="original", max_megapixels=16)
+
+
+@router.post("/api/v1/assets/{asset_id}/selection", status_code=status.HTTP_201_CREATED)
+async def save_selection(
+    asset_id: uuid.UUID,
+    request: Request,
+    principal: AssetWriter,
+    image: Annotated[UploadFile, File()],
+) -> dict[str, Any]:
+    return await _save_raster_result(asset_id, request, principal, image, basic_edit=False)
+
+
+@router.post("/api/v1/assets/{asset_id}/edit", status_code=status.HTTP_201_CREATED)
+async def save_raster_edit(
+    asset_id: uuid.UUID,
+    request: Request,
+    principal: AssetWriter,
+    image: Annotated[UploadFile, File()],
+    project: Annotated[UploadFile | None, File()] = None,
+) -> dict[str, Any]:
+    return await _save_raster_result(
+        asset_id, request, principal, image, basic_edit=True, project=project
+    )
+
+
+@router.get("/api/v1/assets/{asset_id}/edit/project")
+async def get_raster_project(asset_id: uuid.UUID, request: Request, principal: AssetReader):
+    async with request.app.state.runtime_services.database.session_factory() as session:
+        asset = await service.require_usable(session, asset_id, owner_id=principal.user_id)
+        if not asset.asset_metadata.get("raster_project_ready"):
+            raise ApiError(404, "RASTER_PROJECT_NOT_FOUND", "该版本没有保存的图层")
+    try:
+        raw = await _storage(request).get_object(service.raster_project_key(asset.object_key))
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "图层读取失败，请重试") from exc
+    return Response(
+        raw, media_type="application/octet-stream", headers={"Cache-Control": "private, no-store"}
+    )
+
+
+async def _save_raster_result(
+    asset_id: uuid.UUID,
+    request: Request,
+    principal,
+    image: UploadFile,
+    *,
+    basic_edit: bool,
+    project: UploadFile | None = None,
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        base, source_key, limited = await _selection_source(session, asset_id, principal.user_id)
+        if basic_edit:
+            # Paint and fill apply to the current version, never to an older
+            # pre-cutout layer. Previous versions remain available separately.
+            source_key, limited = base.object_key, False
+        entitlement = await entitlements.current_snapshot(
+            session,
+            principal.user_id,
+            request_id=getattr(request.state, "request_id", "selection-save"),
+        )
+        await session.commit()
+    max_mb = min(
+        entitlement.max_upload_mb,
+        int(
+            await runtime_config_value(
+                request.app.state.runtime_services,
+                "general",
+                "max_upload_mb",
+                request.app.state.settings.max_upload_mb,
+            )
+        ),
+    )
+    max_mp = min(
+        16,
+        entitlement.max_image_megapixels,
+        int(
+            await runtime_config_value(
+                request.app.state.runtime_services,
+                "general",
+                "max_image_megapixels",
+                request.app.state.settings.max_image_megapixels,
+            )
+        ),
+    )
+    raw = await image.read(max_mb * 1024 * 1024 + 1)
+    if len(raw) > max_mb * 1024 * 1024:
+        raise ApiError(413, "ASSET_TOO_LARGE", f"文件超过 {max_mb} MB 上传限制")
+    project_raw = None
+    if project is not None:
+        limit = min(max_mb * 1024 * 1024, 128 * 1024 * 1024)
+        project_raw = await project.read(limit + 1)
+        if len(project_raw) + len(raw) > limit:
+            raise ApiError(
+                413, "ASSET_TOO_LARGE", f"图片与图层合计超过 {max_mb} MB，请减少图层或缩小图片"
+            )
+    storage = _storage(request)
+    try:
+        prepared = await asyncio.to_thread(
+            _validate_selection_result, raw, base.width, base.height, max_mp
+        )
+        if project_raw is not None:
+            assert base.width is not None and base.height is not None
+            project_raw, prepared = await asyncio.to_thread(
+                validate_raster_project, project_raw, base.width, base.height, max_mp
+            )
+            if len(project_raw) + len(prepared.data) > min(max_mb, 128) * 1024 * 1024:
+                raise AssetInputError("规范化后的图片与图层超过上传限制，请减少图层")
+        source_raw = await storage.get_object(source_key)
+        source = await asyncio.to_thread(
+            prepare_asset, source_raw, kind="original", max_megapixels=16
+        )
+        if basic_edit:
+            source = await asyncio.to_thread(_raster_restore_layer, source.data, prepared.data)
+        asset = await service.store(
+            database,
+            storage,
+            owner_id=principal.user_id,
+            prepared=prepared,
+            edit_source=source,
+            raster_project=project_raw,
+            kind="result",
+            operation_code="image.edit" if basic_edit else "cutout.refine",
+            parent_asset_id=base.id,
+            retention_days=entitlement.retention_days,
+            original_filename="image-edited.png" if basic_edit else "selection-refined.png",
+            metadata={
+                "workflow": "raster-edit" if basic_edit else "background-selection",
+                "edit_restore_limited": limited,
+            },
+            request_id=getattr(request.state, "request_id", "selection-save"),
+        )
+    except AssetInputError as exc:
+        raise ApiError(422, "INVALID_SELECTION_RESULT", str(exc)) from exc
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "修边结果保存失败，请重试") from exc
+    return {"asset": asset_payload(asset)}
+
+
+@router.post("/api/v1/assets/{asset_id}/crop", status_code=status.HTTP_201_CREATED)
+async def save_crop(
+    asset_id: uuid.UUID, payload: CropRequest, request: Request, principal: AssetWriter
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        base, source_key, limited = await _selection_source(session, asset_id, principal.user_id)
+        entitlement = await entitlements.current_snapshot(
+            session, principal.user_id, request_id=getattr(request.state, "request_id", "crop-save")
+        )
+        await session.commit()
+    assert base.width is not None and base.height is not None
+    if (
+        payload.x + payload.width > base.width
+        or payload.y + payload.height > base.height
+        or (payload.shape == "circle" and payload.width != payload.height)
+    ):
+        raise ApiError(422, "INVALID_CROP", "裁切区域必须位于图片内，圆形的宽高必须相同")
+    max_mp = min(
+        16,
+        entitlement.max_image_megapixels,
+        int(
+            await runtime_config_value(
+                request.app.state.runtime_services,
+                "general",
+                "max_image_megapixels",
+                request.app.state.settings.max_image_megapixels,
+            )
+        ),
+    )
+    storage = _storage(request)
+    try:
+        raw = await storage.get_object(base.object_key)
+        prepared = await asyncio.to_thread(
+            crop_asset,
+            raw,
+            **payload.model_dump(),
+            expected_size=(base.width, base.height),
+            max_megapixels=max_mp,
+        )
+        if source_key == base.object_key:
+            restoration = prepared
+        else:
+            source_raw = await storage.get_object(source_key)
+            restoration = await asyncio.to_thread(
+                crop_asset,
+                source_raw,
+                **payload.model_dump(),
+                expected_size=(base.width, base.height),
+                max_megapixels=max_mp,
+            )
+        asset = await service.store(
+            database,
+            storage,
+            owner_id=principal.user_id,
+            prepared=prepared,
+            edit_source=restoration,
+            kind="result",
+            operation_code="image.crop",
+            parent_asset_id=base.id,
+            retention_days=entitlement.retention_days,
+            original_filename="crop.png",
+            metadata={"crop": payload.model_dump(), "edit_restore_limited": limited},
+            request_id=getattr(request.state, "request_id", "crop-save"),
+        )
+    except AssetInputError as exc:
+        raise ApiError(422, "INVALID_CROP", str(exc)) from exc
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "裁切结果保存失败，请重试") from exc
+    return {"asset": asset_payload(asset)}
+
+
+@router.get("/api/v1/assets/{asset_id}/lineage")
+async def get_asset_lineage(
+    asset_id: uuid.UUID, request: Request, principal: AssetReader
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        asset = await service.get_visible(
+            session, asset_id, owner_id=principal.user_id, include_deleted=True
+        )
+        rows = list(
+            (
+                await session.scalars(
+                    select(Asset)
+                    .where(
+                        Asset.owner_id == principal.user_id,
+                        Asset.root_asset_id == asset.root_asset_id,
+                        Asset.status != "quarantined",
+                    )
+                    .order_by(Asset.created_at, Asset.id)
+                )
+            ).all()
+        )
+    return {"items": [asset_payload(item) for item in rows]}
+
+
+@router.post("/api/v1/assets/{asset_id}/download-url")
+async def create_download_url(
+    asset_id: uuid.UUID, request: Request, principal: AssetReader
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    settings = request.app.state.settings
+    ttl_seconds = int(
+        await runtime_config_value(
+            request.app.state.runtime_services,
+            "general",
+            "signed_url_ttl_seconds",
+            settings.asset_download_url_ttl_seconds,
+        )
+    )
+    async with database.session_factory() as session:
+        asset = await service.require_usable(session, asset_id, owner_id=principal.user_id)
+        try:
+            url = await _storage(request).presign_get(
+                asset.object_key,
+                expires_seconds=ttl_seconds,
+                download_filename=(
+                    re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", asset.original_filename).strip(". ")[:160]
+                    if asset.operation_code == "image.toolbox" and asset.original_filename
+                    else f"{asset.id}.{asset.extension}"
+                ),
+            )
+        except ObjectStorageError as exc:
+            raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+        service.log_access(
+            session,
+            asset_id=asset.id,
+            actor_user_id=principal.user_id,
+            action="download",
+            ip_hash=_ip_hash(request),
+            request_id=getattr(request.state, "request_id", "asset-download"),
+        )
+        await session.commit()
+    expires_at = datetime.now(UTC).timestamp() + ttl_seconds
+    return {
+        "url": url,
+        "expires_at": datetime.fromtimestamp(expires_at, UTC),
+        "expires_in": ttl_seconds,
+    }
+
+
+@router.delete("/api/v1/assets/{asset_id}")
+async def delete_asset(
+    asset_id: uuid.UUID, request: Request, principal: AssetDeleter
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        asset = await service.soft_delete(
+            session,
+            asset_id=asset_id,
+            owner_id=principal.user_id,
+            grace_days=request.app.state.settings.asset_delete_grace_days,
+        )
+        await session.commit()
+        await session.refresh(asset)
+    return {"asset": asset_payload(asset)}
+
+
+@router.post("/api/v1/assets/{asset_id}/restore")
+async def restore_asset(
+    asset_id: uuid.UUID, request: Request, principal: AssetDeleter
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    try:
+        async with database.session_factory() as session:
+            asset = await service.restore(
+                session,
+                _storage(request),
+                asset_id=asset_id,
+                owner_id=principal.user_id,
+            )
+            await session.commit()
+            await session.refresh(asset)
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+    return {"asset": asset_payload(asset)}
+
+
+@router.get("/api/v1/admin/assets")
+async def list_admin_assets(
+    request: Request,
+    _principal: AdminAssetReader,
+    owner_id: uuid.UUID | None = None,
+    cursor: uuid.UUID | None = None,
+    kind: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=100),
+    order: Literal["asc", "desc"] = "desc",
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        items, next_cursor = await _asset_page(
+            session,
+            owner_id=owner_id,
+            kind=kind,
+            root_id=None,
+            status_filter=status_filter,
+            cursor=cursor,
+            limit=limit,
+            order=order,
+        )
+    return {"items": [asset_payload(item) for item in items], "next_cursor": next_cursor}
+
+
+@router.get("/api/v1/admin/assets/{asset_id}")
+async def get_admin_asset(
+    asset_id: uuid.UUID, request: Request, principal: AdminAssetReader
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        asset = await service.get_visible(session, asset_id, owner_id=None, include_deleted=True)
+        service.log_access(
+            session,
+            asset_id=asset.id,
+            actor_user_id=principal.user_id,
+            action="admin_preview",
+            ip_hash=_ip_hash(request),
+            request_id=getattr(request.state, "request_id", "admin-asset-preview"),
+        )
+        await session.commit()
+    return {"asset": asset_payload(asset)}
+
+
+@router.post("/api/v1/admin/assets/{asset_id}/quarantine")
+async def quarantine_asset(
+    asset_id: uuid.UUID,
+    payload: QuarantineRequest,
+    request: Request,
+    _principal: AdminAssetManager,
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    async with database.session_factory() as session:
+        asset = await service.quarantine(
+            session,
+            asset_id=asset_id,
+            quarantined=payload.quarantined,
+            reason=payload.reason,
+        )
+        await session.commit()
+        await session.refresh(asset)
+    return {"asset": asset_payload(asset)}
+
+
+@router.post("/api/v1/admin/assets/{asset_id}/download-url")
+async def create_admin_download_url(
+    asset_id: uuid.UUID, request: Request, principal: AdminAssetReader
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    settings = request.app.state.settings
+    ttl_seconds = int(
+        await runtime_config_value(
+            request.app.state.runtime_services,
+            "general",
+            "signed_url_ttl_seconds",
+            settings.asset_download_url_ttl_seconds,
+        )
+    )
+    async with database.session_factory() as session:
+        asset = await service.get_visible(session, asset_id, owner_id=None, include_deleted=True)
+        if asset.status == "deleted":
+            raise ApiError(409, "ASSET_DELETED", "已删除素材不能生成访问地址")
+        try:
+            url = await _storage(request).presign_get(
+                asset.object_key,
+                expires_seconds=ttl_seconds,
+                download_filename=f"{asset.id}.{asset.extension}",
+            )
+        except ObjectStorageError as exc:
+            raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+        service.log_access(
+            session,
+            asset_id=asset.id,
+            actor_user_id=principal.user_id,
+            action="admin_preview",
+            ip_hash=_ip_hash(request),
+            request_id=getattr(request.state, "request_id", "admin-asset-download"),
+        )
+        await session.commit()
+    return {
+        "url": url,
+        "expires_at": datetime.now(UTC) + timedelta(seconds=ttl_seconds),
+        "expires_in": ttl_seconds,
+    }
+
+
+@router.post("/api/v1/admin/assets/{asset_id}/restore")
+async def restore_admin_asset(
+    asset_id: uuid.UUID, request: Request, _principal: AdminAssetManager
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    try:
+        async with database.session_factory() as session:
+            asset = await service.restore(
+                session,
+                _storage(request),
+                asset_id=asset_id,
+                owner_id=None,
+                admin=True,
+            )
+            await session.commit()
+            await session.refresh(asset)
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+    return {"asset": asset_payload(asset)}
+
+
+@router.delete("/api/v1/admin/assets/{asset_id}")
+async def force_delete_admin_asset(
+    asset_id: uuid.UUID, request: Request, _principal: AdminAssetManager
+) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    storage = _storage(request)
+    try:
+        async with database.session_factory() as session:
+            asset = await service.soft_delete(
+                session,
+                asset_id=asset_id,
+                owner_id=None,
+                grace_days=request.app.state.settings.asset_delete_grace_days,
+                immediate=True,
+            )
+            await session.flush()
+            queue = (
+                await session.scalars(
+                    select(ObjectDeletionQueue).where(ObjectDeletionQueue.asset_id == asset.id)
+                )
+            ).one()
+            await storage.delete_object(asset.object_key)
+            await storage.delete_object(service.thumbnail_key(asset.object_key))
+            await storage.delete_object(service.edit_source_key(asset.object_key))
+            await storage.delete_object(service.raster_project_key(asset.object_key))
+            queue.status = "completed"
+            queue.attempts += 1
+            queue.last_error = None
+            await session.commit()
+            await session.refresh(asset)
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+    return {"asset": asset_payload(asset), "purged": True}
+
+
+@router.post("/api/v1/admin/storage/orphans/scan")
+async def scan_orphans(request: Request, _principal: AdminAssetReader) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    try:
+        async with database.session_factory() as session:
+            result = await service.scan_orphans(session, _storage(request))
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+    return {
+        "orphan_objects": [
+            {
+                "object_key": item.key,
+                "size_bytes": item.size,
+                "last_modified": item.last_modified,
+            }
+            for item in result.orphan_objects
+        ],
+        "missing_assets": [asset_payload(asset) for asset in result.missing_assets],
+    }
+
+
+@router.post("/api/v1/admin/storage/orphans/reconcile")
+async def reconcile_orphans(request: Request, _principal: AdminAssetManager) -> dict[str, Any]:
+    database = request.app.state.runtime_services.database
+    try:
+        async with database.session_factory() as session:
+            result = await service.reconcile_orphans(
+                session,
+                _storage(request),
+                grace_hours=request.app.state.settings.asset_orphan_grace_hours,
+            )
+            await session.commit()
+    except ObjectStorageError as exc:
+        raise ApiError(503, "OBJECT_STORAGE_UNAVAILABLE", "对象存储暂时不可用") from exc
+    return {"result": result}

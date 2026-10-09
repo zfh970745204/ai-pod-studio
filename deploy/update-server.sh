@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-readonly DEPLOY_DIR="${SUB2IMAGE_DEPLOY_DIR:-/opt/sub2api-image-studio-release-344e9d5}"
+readonly DEPLOY_DIR="${SUB2IMAGE_DEPLOY_DIR:-/www/ai-pod-studio}"
 readonly ENV_FILE="${DEPLOY_DIR}/.env"
 readonly COMPOSE_FILE="${DEPLOY_DIR}/docker-compose.server.yml"
 readonly HEALTH_TIMEOUT_SECONDS="${SUB2IMAGE_HEALTH_TIMEOUT_SECONDS:-180}"

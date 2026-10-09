@@ -58,9 +58,10 @@ processing can only be introduced through the durable Worker path.
 
 ## Production foundation
 
-Copy `.env.example` to `.env`, replace `POSTGRES_PASSWORD`, generate independent
-`AUTH_TOKEN_PEPPER`, `AUTH_HASH_SALT`, and 256-bit `APP_CONFIG_MASTER_KEY` values,
-and set the public HTTPS URL.
+Copy `.env.example` to `.env`, replace `POSTGRES_PASSWORD` with a URL-safe random
+value such as `openssl rand -hex 32`, generate independent `AUTH_TOKEN_PEPPER`,
+`AUTH_HASH_SALT`, and 256-bit `APP_CONFIG_MASTER_KEY` values, and set the public
+HTTPS URL.
 The production stack requires TLS because session cookies are always `Secure`.
 Start the isolated production services, create the first administrator, then publish
 Sub2API and R2 configuration in the administrator console:
@@ -115,11 +116,12 @@ administrator after the first `super_admin` exists.
 
 图片任务报错修复、新版编辑器和对应更新步骤见 [图片任务与编辑器更新](docs/studio-update-2026-09.md)。
 
-For a memory-constrained server that uses Neon PostgreSQL, Cloudflare R2, and an
+For a memory-constrained server that uses Docker PostgreSQL, Cloudflare R2, and an
 existing host Nginx, use `docker-compose.server.yml` instead. Its application image
-is published to GHCR only after the `main` quality workflow succeeds. It starts only
-Web, a configurable concurrent Worker, Scheduler, and a memory-limited Redis; FastAPI is
-bound to `127.0.0.1:18080` for the host reverse proxy. See
+is published to GHCR only after the `main` quality workflow succeeds. It starts an
+isolated PostgreSQL database, Web, a configurable concurrent Worker, Scheduler, and a
+memory-limited Redis; FastAPI is bound to `127.0.0.1:18080` for the host reverse proxy.
+See
 `docs/productization/13-迁移部署与上线运维.md` for the production sequence.
 
 首次安装服务器更新器后，后续每次镜像发布完成只需执行一条命令：

@@ -2,7 +2,7 @@ x-app-environment: &app-environment
   APP_ENV: production
   APP_VERSION: ${APP_VERSION:-0.13.0}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
-  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+  DATABASE_URL: postgresql+asyncpg://ai_pod_studio:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/ai_pod_studio
   REDIS_URL: redis://redis:6379/0
   APP_CONFIG_MASTER_KEY: ${APP_CONFIG_MASTER_KEY:?Set APP_CONFIG_MASTER_KEY in .env}
   DEPENDENCY_CHECKS_ENABLED: "true"
@@ -51,6 +51,31 @@ x-app-service: &app-service
     - no-new-privileges:true
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ai_pod_studio
+      POSTGRES_USER: ai_pod_studio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_pod_studio -d ai_pod_studio"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+    mem_limit: 512m
+    cpus: "0.50"
+    pids_limit: 150
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
   redis:
     image: ${IMAGE_REPOSITORY:?Set IMAGE_REPOSITORY in .env}:redis-7-alpine
     command:
@@ -86,6 +111,8 @@ services:
     <<: *app-service
     command: ["python", "-m", "alembic", "-c", "backend/alembic.ini", "upgrade", "head"]
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     mem_limit: 512m
@@ -171,6 +198,7 @@ networks:
   backend:
 
 volumes:
+  postgres-data:
   redis-data:
   runtime-data:
   model-cache:

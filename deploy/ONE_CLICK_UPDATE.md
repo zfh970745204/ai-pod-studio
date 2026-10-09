@@ -17,7 +17,7 @@ chmod 755 /usr/local/sbin/sub2image-update
 sub2image-update
 ```
 
-部署目录默认为 `/opt/sub2api-image-studio-release-344e9d5`。真实 `.env` 必须包含
+部署目录默认为 `/www/ai-pod-studio`。真实 `.env` 必须包含
 `IMAGE_REPOSITORY=ghcr.io/<GitHub-owner>/<repository>`。如需使用其他目录：
 
 ```bash

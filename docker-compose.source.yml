@@ -1,0 +1,22 @@
+# Overlay for deploying the source currently copied to a server. Combine with
+# docker-compose.server.yml so the server builds this checkout instead of
+# pulling the application image from a registry.
+services:
+  redis:
+    image: redis:7-alpine
+
+  migrate:
+    build: .
+    image: ai-pod-studio:source
+
+  web:
+    build: .
+    image: ai-pod-studio:source
+
+  worker:
+    build: .
+    image: ai-pod-studio:source
+
+  scheduler:
+    build: .
+    image: ai-pod-studio:source

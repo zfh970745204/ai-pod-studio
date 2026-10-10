@@ -410,6 +410,46 @@ async def test_cache_retains_last_good_config_after_ciphertext_corruption(
 
 
 @pytest.mark.asyncio
+async def test_replacing_unreadable_secret_does_not_decrypt_old_value(
+    config_context: ConfigContext,
+) -> None:
+    admin = await seed_user(config_context, "rotation-admin@example.com", ("super_admin",))
+    async with client_for(config_context, "rotation-device") as client:
+        await login(client, admin.email)
+        initial = sub2api_draft()
+        initial.pop("confirm_sensitive_change")
+        saved = await client.put(
+            "/api/v1/admin/config/sub2api",
+            json={"base_version": None, **initial},
+        )
+        assert saved.status_code == 200, saved.text
+
+        async with config_context.database.session_factory() as session:
+            secret = (await session.scalars(select(EncryptedSecret))).one()
+            secret.ciphertext = bytes([secret.ciphertext[0] ^ 1]) + secret.ciphertext[1:]
+            await session.commit()
+
+        replacement_key = "replacement-secret-5678"
+        updated = sub2api_draft(secret=replacement_key)
+        updated.pop("confirm_sensitive_change")
+        replacement = await client.put(
+            "/api/v1/admin/config/sub2api",
+            json={"base_version": 1, **updated},
+        )
+        assert replacement.status_code == 200, replacement.text
+        assert replacement_key not in replacement.text
+        assert replacement.json()["version"]["version"] == 2
+
+    async with config_context.database.session_factory() as session:
+        service = config_context.runtime.config_service
+        with pytest.raises(ConfigLoadError):
+            await service.resolved(session, "sub2api", 1)
+        resolved = await service.resolved(session, "sub2api")
+        assert resolved.version == 2
+        assert resolved.secrets == {"api_key": replacement_key}
+
+
+@pytest.mark.asyncio
 async def test_worker_completes_queued_connection_test(config_context: ConfigContext) -> None:
     admin = await seed_user(config_context, "worker-admin@example.com", ("super_admin",))
     service = config_context.runtime.config_service

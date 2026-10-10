@@ -466,7 +466,9 @@ class ConfigService:
         session.add(version)
         await session.flush()
         if base is not None:
-            await self._copy_secrets(session, code, base.id, version.id)
+            await self._copy_secrets(
+                session, code, base.id, version.id, exclude=set(secret_updates)
+            )
         await self._apply_secret_updates(session, code, version.id, secret_updates)
         self._audit(
             session,

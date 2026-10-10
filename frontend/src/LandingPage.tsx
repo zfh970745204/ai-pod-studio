@@ -50,23 +50,23 @@ export function LandingPage() {
   }, []);
 
   const guest = session === "guest";
-  const startHref = guest ? registration ? "/register" : "/login" : "/app/studio";
-  const startLabel = guest ? registration ? "创建账号，开始创作" : "登录并开始创作" : "开始创作";
+  const startHref = guest ? registration ? "/register" : "/login" : "/app/pod";
+  const startLabel = guest ? registration ? "创建账号，开始开发" : "登录并开始开发" : "进入产品开发";
   const brand = <a className="landing-brand" href="/" aria-label={`${branding.site_name} · 网站首页`}><img src={branding.logo_url} width="34" height="34" alt="" /><strong>{branding.site_name}</strong></a>;
   return <main className="landing-page">
     <nav className="landing-nav" aria-label="网站导航">{brand}<div className="landing-nav-sections"><a href="#effects">功能效果</a><a href="#workflow">使用流程</a></div><div className="landing-account">
       {session === "member" && <span className="landing-greeting">你好，{user?.display_name}</span>}
-      {guest ? <><a href="/login">登录</a>{registration && <a className="landing-button small" href="/register">开始使用<ArrowRight size={15} /></a>}</> : <a className="landing-button small" href="/app">进入工作台<ArrowRight size={15} /></a>}
+      {guest ? <><a href="/login">登录</a>{registration && <a className="landing-button small" href="/register">开始使用<ArrowRight size={15} /></a>}</> : <a className="landing-button small" href="/app/pod">进入产品开发<ArrowRight size={15} /></a>}
     </div></nav>
     <section className="landing-hero">
-      <div className="landing-hero-copy"><span className="landing-eyebrow"><i />为创作者而设计的图片工作台</span><h1>把一张图片，<br />变成<span>下一件作品。</span></h1><p>提取喜欢的印花，修复模糊的细节，<br className="landing-desktop-break" />让脑海里的灵感，拥有清晰的模样。</p><div className="landing-hero-actions"><a className="landing-button" href={startHref}>{startLabel}<ArrowRight size={18} /></a><a className="landing-text-link" href="#effects">看看效果<ArrowDown size={16} /></a></div><div className="landing-benefits"><span><Check size={14} />原图与结果同步对比</span><span><Check size={14} />每一步都有独立版本</span></div></div>
+      <div className="landing-hero-copy"><span className="landing-eyebrow"><i />AI POD 产品开发与批量上架系统</span><h1>把真实胚件，<br />开发成<span>可审核商品。</span></h1><p>从产品创意、设计方案和印花主稿，<br className="landing-desktop-break" />到商品视觉与英文文案，全部沿着可追溯链路推进。</p><div className="landing-hero-actions"><a className="landing-button" href={startHref}>{startLabel}<ArrowRight size={18} /></a><a className="landing-text-link" href="#workflow">查看流程<ArrowDown size={16} /></a></div><div className="landing-benefits"><span><Check size={14} />真实胚件作为商品锚点</span><span><Check size={14} />每一步由人工审核确认</span></div></div>
       <div className="landing-hero-visual custom">
         <img className="landing-custom-art" src={branding.home_image_url} alt={`${branding.site_name} 产品创作展示`} fetchPriority="high" decoding="async" />
       </div>
     </section>
-    <div className="landing-capabilities"><span>从灵感到可用素材</span><div><span>AI 图片生成</span><i /><span>产品印花提取</span><i /><span>高清重绘</span><i /><span>透明 PNG</span><i /><span>版本管理</span></div></div>
+    <div className="landing-capabilities"><span>从胚件到商品资料</span><div><span>AI 胚件理解</span><i /><span>Product Ideas</span><i /><span>Print Master</span><i /><span>商品视觉</span><i /><span>英文文案</span></div></div>
     <section className="landing-effects" id="effects">
-      <header className="landing-section-heading"><div><span className="landing-eyebrow">每一处改变，看得见</span><h2>让图片更接近你的想象。</h2></div><p>减少重复操作，<br />把时间留给真正的创作。</p></header>
+      <header className="landing-section-heading"><div><span className="landing-eyebrow">图片能力作为辅助</span><h2>为产品开发处理真实素材。</h2></div><p>提取、重绘和精修都保留为辅助能力，<br />不替代 POD 主流程。</p></header>
       <div className="landing-effect-layout"><div className="landing-effect-copy"><div className="landing-demo-tabs" role="tablist" aria-label="功能效果">{demos.map((item, index) => <button key={item.name} id={`demo-tab-${index}`} aria-controls="landing-demo-panel" type="button" role="tab" aria-selected={demo === index} tabIndex={demo === index ? 0 : -1} onClick={() => setDemo(index)} onKeyDown={(event) => {
         if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
@@ -76,12 +76,12 @@ export function LandingPage() {
         <div className="landing-comparison" id="landing-demo-panel" role="tabpanel" aria-labelledby={`demo-tab-${demo}`}><figure><figcaption><i />{demos[demo].before}</figcaption><DemoArt mode={demo} /></figure><span className="landing-comparison-arrow"><ArrowRight size={20} /></span><figure><figcaption><i />{demos[demo].after}</figcaption><DemoArt mode={demo} result /></figure></div>
       </div>
     </section>
-    <section className="landing-workflow" id="workflow"><header className="landing-section-heading"><div><span className="landing-eyebrow">简单三步，开始创作</span><h2>流程更轻，创作更自由。</h2></div><Sparkles size={30} strokeWidth={1.2} /></header><div className="landing-steps">{[
-      ["01", "放入你的灵感", "上传已有图片，或描述一张你想创作的新图。"],
-      ["02", "选择合适的工具", "提取、重绘或精修，提交前确认质量与积分报价。"],
-      ["03", "带走满意的作品", "并排查看前后细节，下载结果，或沿着版本继续创作。"],
+    <section className="landing-workflow" id="workflow"><header className="landing-section-heading"><div><span className="landing-eyebrow">产品开发主链路</span><h2>从参考图，到可审核的商品资料。</h2></div><Sparkles size={30} strokeWidth={1.2} /></header><div className="landing-steps">{[
+      ["01", "建立真实胚件", "录入品类与材质，上传供应商或已确认的真实产品参考图。"],
+      ["02", "筛选产品与设计", "生成产品创意和设计方案，人工采用后生成并锁定 Print Master。"],
+      ["03", "完成商品资料", "基于同一胚件和 Print Master 生成商品视觉、审核结果并输出英文文案。"],
     ].map(([number, title, description]) => <article key={number}><span>{number}</span><h3>{title}</h3><p>{description}</p></article>)}</div></section>
-    <section className="landing-closing"><div><span className="landing-eyebrow">下一件作品，从这里开始</span><h2>给灵感一个落地的地方。</h2></div><a className="landing-button" href={startHref}>{startLabel}<ArrowRight size={18} /></a></section>
-    <footer className="landing-footer">{brand}<span>让创作简单，让细节出色。</span><a href="/app">进入工作台<ArrowRight size={14} /></a></footer>
+    <section className="landing-closing"><div><span className="landing-eyebrow">从真实胚件开始</span><h2>把商品开发变成一条清晰链路。</h2></div><a className="landing-button" href={startHref}>{startLabel}<ArrowRight size={18} /></a></section>
+    <footer className="landing-footer">{brand}<span>让产品开发有依据，让每一步可追溯。</span><a href="/app/pod">进入产品开发<ArrowRight size={14} /></a></footer>
   </main>;
 }

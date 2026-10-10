@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "Sub2Image Studio"
+    app_name: str = "AI POD Studio"
     app_version: str = "0.13.0"
     app_environment: Literal["development", "test", "production"] = Field(
         default="development", validation_alias="APP_ENV"

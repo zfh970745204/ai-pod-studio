@@ -34,9 +34,9 @@ class RegistrationMailer:
             ) from exc
         if not config.values.get("enabled"):
             raise ApiError(503, "EMAIL_NOT_CONFIGURED", "验证邮件服务尚未启用，请联系管理员")
-        subject = "Sub2Image 注册邮箱验证码"
+        subject = "AI POD Studio 注册邮箱验证码"
         body = (
-            f"你的 Sub2Image 注册验证码是：{code}\n\n"
+            f"你的 AI POD Studio 注册验证码是：{code}\n\n"
             "验证码 10 分钟内有效，仅用于验证此邮箱。请勿将验证码告知他人。\n"
             "如果不是你本人操作，请忽略这封邮件。"
         )

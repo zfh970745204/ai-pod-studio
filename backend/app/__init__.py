@@ -1,1 +1,1 @@
-"""Sub2Image Studio backend."""
+"""AI POD Studio backend."""

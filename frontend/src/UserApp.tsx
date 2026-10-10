@@ -116,9 +116,9 @@ const NAV_ITEMS: Array<{
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }> = [
   { id: "home", label: "工作台", icon: LayoutDashboard },
-  { id: "pod", label: "AI 产品开发", icon: Sparkles },
-  { id: "studio", label: "图片编辑器", icon: WandSparkles },
-  { id: "toolbox", label: "图片工具箱", icon: Grid2X2 },
+  { id: "pod", label: "产品开发", icon: Sparkles },
+  { id: "studio", label: "图片辅助", icon: WandSparkles },
+  { id: "toolbox", label: "批量图片处理", icon: Grid2X2 },
   { id: "assets", label: "素材库", icon: Images },
   { id: "jobs", label: "任务中心", icon: ListTodo },
   { id: "points", label: "积分流水", icon: Coins },
@@ -172,6 +172,26 @@ const OPERATION_META: Record<
   "ai.variant": { label: "生成变体", description: "生成相近视觉版本", icon: ImagePlus, source: true },
   "vectorize.svg": { label: "矢量化", description: "转换为 SVG 文件", icon: PenTool, source: true },
 };
+
+// POD stages require project context and human review. They are not image-editor tools.
+const STUDIO_OPERATION_CODES = new Set([
+  "ai.generate",
+  "ai.ecommerce",
+  "ai.redraw",
+  "ai.extract_print",
+  "cutout.smart",
+  "upscale.2x",
+  "upscale.4x",
+  "ai.repair",
+  "ai.text_fix",
+  "color.effect",
+  "ai.variant",
+  "vectorize.svg",
+]);
+
+function isStudioOperation(code: string | null | undefined): boolean {
+  return Boolean(code && STUDIO_OPERATION_CODES.has(code));
+}
 
 const JOB_STATUS: Record<string, { label: string; tone: string }> = {
   queued: { label: "排队中", tone: "waiting" },
@@ -689,15 +709,17 @@ function DashboardPage({ bootstrap }: { bootstrap: BootstrapData }) {
   const activeJobs = jobs?.filter((item) => ["queued", "running", "retry_wait"].includes(item.status)).length || 0;
   return (
     <>
-      <PageHeader eyebrow="YOUR WORKSPACE" title={`你好，${bootstrap.user.display_name}`} description="灵感、素材与作品，都在这里。">
-        <button className="user-primary" onClick={() => navigate("/app/studio")} type="button"><Plus size={17} />新建图片任务</button>
+      <PageHeader eyebrow="POD WORKSPACE" title={`你好，${bootstrap.user.display_name}`} description="从真实胚件到可审核商品，在同一条开发链路中完成。">
+        <button className="user-primary" onClick={() => navigate("/app/pod")} type="button"><Plus size={17} />进入产品开发</button>
       </PageHeader>
       <section className="user-creative-hero">
-        <div><span><i className="user-creative-dot" />A SPACE FOR YOUR NEXT IDEA</span><h2>创意，自有光芒。<br /><em>把想象精雕成作品。</em></h2><p>从图像生成到印花提取，让每一处细节，<br className="wide-only" />都成为你的设计语言。</p><button className="user-primary" onClick={() => navigate("/app/studio?tool=ai.generate")} type="button">开始新的创作<ArrowRight size={17} /></button><small className="user-hero-footnote">你的灵感，你的创作空间。</small></div>
+        <div><span><i className="user-creative-dot" />FROM BLANK TO LISTING</span><h2>从真实胚件出发。<br /><em>形成可审核的商品。</em></h2><p>探索产品创意，筛选设计方案，锁定印花主稿，<br className="wide-only" />再生成商品视觉与文案。</p><button className="user-primary" onClick={() => navigate("/app/pod")} type="button">开始产品开发<ArrowRight size={17} /></button><small className="user-hero-footnote">AI 生成候选，关键决策始终由你确认。</small></div>
         <BrandArtwork place="home" className="user-collection-art" />
       </section>
-      <section className="user-quick-tools" aria-label="快捷创作">
-        {(["ai.generate", "ai.extract_print", "ai.redraw"] as const).map((code) => { const item = OPERATION_META[code]; const Icon = item.icon; return <button key={code} onClick={() => navigate(`/app/studio?tool=${code}`)} type="button"><span><Icon size={22} /></span><div><strong>{item.label}</strong><small>{item.description}</small></div><ArrowRight size={17} /></button>; })}
+      <section className="user-quick-tools" aria-label="产品开发入口">
+        <button onClick={() => navigate("/app/pod")} type="button"><span><Sparkles size={22} /></span><div><strong>产品开发</strong><small>从胚件分析开始，逐步完成创意、设计、印花和商品视觉。</small></div><ArrowRight size={17} /></button>
+        <button onClick={() => navigate("/app/assets")} type="button"><span><Images size={22} /></span><div><strong>胚件与素材</strong><small>管理供应商参考图、印花候选和商品资产。</small></div><ArrowRight size={17} /></button>
+        <button onClick={() => navigate("/app/studio")} type="button"><span><WandSparkles size={22} /></span><div><strong>图片辅助</strong><small>为开发流程补充提取、重绘、抠图和图片精修。</small></div><ArrowRight size={17} /></button>
       </section>
       <section className="user-stat-strip" aria-label="账户概览">
         <button onClick={() => navigate("/app/points")} type="button"><span><Coins size={18} />可用积分</span><strong>{bootstrap.points.balance.toLocaleString("zh-CN")}</strong><small>累计消费 {bootstrap.points.lifetime_spent.toLocaleString("zh-CN")}</small></button>
@@ -748,12 +770,14 @@ function StudioPage({
   bootstrap: BootstrapData;
   onBootstrap: (value: BootstrapData) => void;
 }) {
-  const initialSource = new URLSearchParams(window.location.search).get("source");
-  const initialJob = new URLSearchParams(window.location.search).get("job");
+  const search = new URLSearchParams(window.location.search);
+  const initialSource = search.get("source");
+  const initialJob = search.get("job");
+  const requestedTool = search.get("tool");
   const [operations, setOperations] = useState<Operation[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [operationCode, setOperationCode] = useState(
-    new URLSearchParams(window.location.search).get("tool") || bootstrap.preferences.studio_layout.last_tool || (initialSource ? "ai.redraw" : "ai.generate"),
+    [requestedTool, bootstrap.preferences.studio_layout.last_tool].find(isStudioOperation) || (initialSource ? "ai.redraw" : "ai.generate"),
   );
   const [sourceId, setSourceId] = useState(initialSource || "");
   const [referenceIds, setReferenceIds] = useState<string[]>(initialSource ? [initialSource] : []);
@@ -807,12 +831,16 @@ function StudioPage({
   const maskRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (requestedTool?.startsWith("pod.")) navigate("/app/pod");
+  }, [requestedTool]);
+
   const loadStudio = useCallback(async () => {
     setBusy("loading");
     setError("");
     try {
       const [operationPayload, assetPayload] = await Promise.all([api.operations(), api.assets()]);
-      const editorOperations = operationPayload.items.filter((item) => item.enabled && item.code !== "image.toolbox");
+      const editorOperations = operationPayload.items.filter((item) => item.enabled && isStudioOperation(item.code));
       setOperations(editorOperations);
       setAssets((current) => [...assetPayload.items, ...current.filter((item) => !assetPayload.items.some((loaded) => loaded.id === item.id))]);
       if (!initialJob) setOperationCode((current) =>
@@ -913,6 +941,10 @@ function StudioPage({
       setRestoringJob(true);
       void api.job(jobId).then(async ({ job }) => {
         if (cancelled) return;
+        if (job.operation_code.startsWith("pod.")) {
+          navigate("/app/pod");
+          return;
+        }
         setOperationCode(job.operation_code);
         const refs = Array.isArray(job.parameters.reference_asset_ids) ? job.parameters.reference_asset_ids.map(String) : job.source_asset_id ? [job.source_asset_id] : [];
         setReferenceIds(refs);
@@ -1176,7 +1208,7 @@ function StudioPage({
   return (
     <div className={`user-studio-page${expanded ? " preview-expanded" : ""}`}>
       <BusyDialog title={busy === "upload" ? "正在上传图片" : busy === "mask" ? "正在上传遮罩" : busy === "quote" ? "正在准备任务" : downloadingBatch ? "正在打包下载" : null} detail={busy === "upload" ? uploadDetail : busy === "mask" ? "正在保存遮罩并核对图片尺寸" : busy === "quote" ? "正在准备素材并核算本次积分" : "正在整理整组图片，准备完成后自动开始下载"} />
-      <PageHeader eyebrow="IMAGE STUDIO" title="图片编辑器" description="选择工具，上传图片，细节交给我们。">
+      <PageHeader eyebrow="IMAGE SUPPORT" title="图片辅助" description="处理素材、提取印花或修复细节；产品开发请使用产品开发工作台。">
         <button className="user-secondary" onClick={() => navigate("/app/jobs")} type="button"><ListTodo size={17} />任务中心</button>
       </PageHeader>
       <div className="user-studio-layout">
@@ -1344,7 +1376,7 @@ function AssetsPage({ bootstrap }: { bootstrap: BootstrapData }) {
         </div>
       </section>
       {error && <InlineMessage tone="error">{error}</InlineMessage>}
-      {!items ? <PageLoading label="正在载入素材" /> : filtered.length === 0 ? <EmptyState icon={Images} title="没有符合条件的素材" description="调整筛选条件，或从图片编辑器上传新素材。" /> : (
+      {!items ? <PageLoading label="正在载入素材" /> : filtered.length === 0 ? <EmptyState icon={Images} title="没有符合条件的素材" description="调整筛选条件，或从图片辅助工具上传新素材。" /> : (
         <section className={`user-asset-collection ${view}`} aria-label="素材列表">
           {filtered.map((asset) => <AssetItem asset={asset} key={asset.id} onDelete={() => setDeleteTarget(asset)} onLineage={() => void showLineage(asset)} />)}
         </section>

@@ -12,7 +12,7 @@ describe("public landing session and feature navigation", () => {
     const first = render(<LandingPage />);
     expect(await screen.findByText("你好，设计师")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "登录" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "开始创作" }).every(link => link.getAttribute("href") === "/app/studio")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "进入产品开发" }).every(link => link.getAttribute("href") === "/app/pod")).toBe(true);
     expect(screen.getByRole("link", { name: "试试印花提取" })).toHaveAttribute("href", "/app/studio?tool=ai.extract_print");
     first.unmount();
     render(<LandingPage />);
@@ -30,7 +30,7 @@ describe("public landing session and feature navigation", () => {
     render(<LandingPage />);
     expect(await screen.findByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
     expect(screen.queryByRole("link", { name: "开始使用" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "登录并开始创作" })[0]).toHaveAttribute("href", "/login");
+    expect(screen.getAllByRole("link", { name: "登录并开始开发" })[0]).toHaveAttribute("href", "/login");
     signedIn = true;
     act(() => window.dispatchEvent(new Event("focus")));
     expect(await screen.findByText("你好，设计师")).toBeInTheDocument();
@@ -38,8 +38,8 @@ describe("public landing session and feature navigation", () => {
     act(() => window.dispatchEvent(new Event("pageshow")));
     expect(await screen.findByRole("link", { name: "开始使用" })).toHaveAttribute("href", "/register");
     expect(screen.queryByText("你好，设计师")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "创建账号，开始创作" })).toHaveLength(2);
-    for (const link of screen.getAllByRole("link", { name: "创建账号，开始创作" })) {
+    expect(screen.getAllByRole("link", { name: "创建账号，开始开发" })).toHaveLength(2);
+    for (const link of screen.getAllByRole("link", { name: "创建账号，开始开发" })) {
       expect(link).toHaveAttribute("href", "/register");
     }
   });
@@ -47,7 +47,7 @@ describe("public landing session and feature navigation", () => {
   it("keeps a direct workspace entry during session lookup failures and switches effect examples with the keyboard", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/me") ? response({}, 503) : response({ registration_enabled: true })));
     render(<LandingPage />);
-    await waitFor(() => expect(screen.getAllByRole("link", { name: "进入工作台" })[0]).toHaveAttribute("href", "/app"));
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "进入产品开发" })[0]).toHaveAttribute("href", "/app/pod"));
     expect(screen.queryByRole("link", { name: "登录" })).not.toBeInTheDocument();
     const extraction = screen.getByRole("tab", { name: "印花提取" });
     fireEvent.keyDown(extraction, { key: "ArrowRight" });

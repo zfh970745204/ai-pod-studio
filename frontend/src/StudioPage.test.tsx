@@ -36,6 +36,10 @@ const operations = ["ai.generate", "ai.redraw", "color.effect", "ai.extract_prin
   member_base_points: 20, current_price: { base_points: 20 },
   ...(code === "ai.ecommerce" ? { ecommerce_plan: ecommercePlan } : {}),
 }));
+const podOperation = {
+  id: "pod.idea.generate", code: "pod.idea.generate", name: "AI 产品创意", engine_type: "sub2api", enabled: true,
+  member_base_points: 4, current_price: { base_points: 4 },
+};
 const quote = { id: "quote-1", operation_code: "ai.generate", base_points: 20, discount_points: 0, surcharge_points: 0, final_points: 20, expires_at: "2099-01-01T00:00:00Z" };
 const job = { id: "job-1", operation_code: "ai.generate", status: "queued", progress: 0, charged_points: 20 };
 const result = { id: "result-1", width: 1024, height: 1024, kind: "result", status: "ready", mime_type: "image/png", size_bytes: 50, created_at: "2026-09-10T00:00:00Z" };
@@ -61,7 +65,7 @@ describe("Studio task workflow", () => {
     events = vi.fn().mockImplementation(() => Promise.resolve(response({ job, next_poll_after_ms: 2000 })));
     fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === "/api/v1/app/bootstrap") return response(bootstrap);
-      if (url === "/api/v1/operations") return response({ items: operations });
+      if (url === "/api/v1/operations") return response({ items: [...operations, podOperation] });
       if (url.startsWith("/api/v1/assets?")) return response({ items: sourceAssets });
       if (url === "/api/v1/jobs/quote") return response({ quote: { ...quote, operation_code: JSON.parse(String(init?.body)).operation_code } });
       if (url === "/api/v1/jobs") return submit(url, init);
@@ -90,6 +94,12 @@ describe("Studio task workflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "开始创作" }));
     return screen.findByRole("dialog", { name: "任务报价" });
   }
+
+  it("keeps POD workflow operations out of the image support tool rail", async () => {
+    render(<UserApp />);
+    expect(await screen.findByRole("button", { name: "AI 生成" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "AI 产品创意" })).not.toBeInTheDocument();
+  });
 
   it("shows the server's set plan by count and quotes the original product reference", async () => {
     sourceAssets = [{ ...result, id: "source-1", kind: "original" }];

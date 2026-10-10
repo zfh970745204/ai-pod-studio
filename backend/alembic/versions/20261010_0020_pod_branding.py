@@ -22,9 +22,7 @@ def upgrade() -> None:
           AND version.version = config_group.active_version
           AND version."values"->>'site_name' = 'Sub2Image'
     """)
-    op.execute(
-        "INSERT INTO schema_migrations (version) VALUES ('20261010_0020')"
-    )
+    op.execute("INSERT INTO schema_migrations (version) VALUES ('20261010_0020')")
 
 
 def downgrade() -> None:

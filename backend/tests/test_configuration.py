@@ -429,7 +429,7 @@ async def test_replacing_unreadable_secret_does_not_decrypt_old_value(
             secret.ciphertext = bytes([secret.ciphertext[0] ^ 1]) + secret.ciphertext[1:]
             await session.commit()
 
-        replacement_key = "replacement-secret-5678"
+        replacement_key = PLAINTEXT + "-rotated"
         updated = sub2api_draft(secret=replacement_key)
         updated.pop("confirm_sensitive_change")
         replacement = await client.put(
